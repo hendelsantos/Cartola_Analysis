@@ -1,4 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Use relative paths — Next.js rewrites proxy /api/* to the backend
+const API_BASE = "";
 
 async function fetcher<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -65,15 +66,15 @@ export async function getClubeAnalytics(id: number) {
 }
 
 export async function getRankingPontuadores(limit = 20) {
-  return fetcher<Atleta[]>(`/api/v1/analytics/rankings/pontuadores?limit=${limit}`);
+  return fetcher<RankingAtleta[]>(`/api/v1/analytics/rankings/pontuadores?limit=${limit}`);
 }
 
 export async function getRankingValorizacoes(limit = 20) {
-  return fetcher<Atleta[]>(`/api/v1/analytics/rankings/valorizacoes?limit=${limit}`);
+  return fetcher<RankingAtleta[]>(`/api/v1/analytics/rankings/valorizacoes?limit=${limit}`);
 }
 
 export async function getRankingCustoBeneficio(limit = 20) {
-  return fetcher<Atleta[]>(`/api/v1/analytics/rankings/custo-beneficio?limit=${limit}`);
+  return fetcher<RankingAtleta[]>(`/api/v1/analytics/rankings/custo-beneficio?limit=${limit}`);
 }
 
 // ── Sync ────────────────────────────────────────────────────────
@@ -201,4 +202,19 @@ export interface ClubeAnalytics {
   total_gols: number;
   total_assistencias: number;
   jogadores_provaveis: number;
+}
+
+export interface RankingAtleta {
+  atleta_id: number;
+  apelido: string;
+  foto: string | null;
+  clube_nome: string;
+  clube_escudo: string;
+  posicao?: string;
+  media: number;
+  preco: number;
+  jogos?: number;
+  pontos?: number;
+  variacao?: number;
+  pontos_por_cartoleta?: number;
 }

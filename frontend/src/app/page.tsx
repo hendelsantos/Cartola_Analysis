@@ -7,7 +7,7 @@ import {
   getRankingValorizacoes,
   getRankingCustoBeneficio,
   type MercadoStatus,
-  type Atleta,
+  type RankingAtleta,
 } from "@/lib/api";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { StatCard } from "@/components/ui/stat-card";
@@ -25,9 +25,9 @@ import {
 
 export default function DashboardPage() {
   const [mercado, setMercado] = useState<MercadoStatus | null>(null);
-  const [topPontuadores, setTopPontuadores] = useState<Atleta[]>([]);
-  const [topValorizacoes, setTopValorizacoes] = useState<Atleta[]>([]);
-  const [topCustoBeneficio, setTopCustoBeneficio] = useState<Atleta[]>([]);
+  const [topPontuadores, setTopPontuadores] = useState<RankingAtleta[]>([]);
+  const [topValorizacoes, setTopValorizacoes] = useState<RankingAtleta[]>([]);
+  const [topCustoBeneficio, setTopCustoBeneficio] = useState<RankingAtleta[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function DashboardPage() {
           title="Maior Pontuador"
           value={
             topPontuadores[0]
-              ? `${topPontuadores[0].apelido} (${formatNumber(topPontuadores[0].media_num)})`
+              ? `${topPontuadores[0].apelido} (${formatNumber(topPontuadores[0].media)})`
               : "-"
           }
           icon={<Trophy className="h-5 w-5" />}
@@ -127,12 +127,12 @@ export default function DashboardPage() {
                       {atleta.apelido}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {atleta.clube_nome} · {atleta.posicao_nome}
+                      {atleta.clube_nome} · {atleta.posicao}
                     </p>
                   </div>
                 </div>
                 <Badge variant="success">
-                  {formatNumber(atleta.media_num)} pts
+                  {formatNumber(atleta.media)} pts
                 </Badge>
               </div>
             ))}
@@ -156,15 +156,15 @@ export default function DashboardPage() {
                       {atleta.apelido}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {formatCurrency(atleta.preco_num)}
+                      {formatCurrency(atleta.preco)}
                     </p>
                   </div>
                 </div>
                 <Badge
-                  variant={atleta.variacao_num >= 0 ? "success" : "danger"}
+                  variant={(atleta.variacao ?? 0) >= 0 ? "success" : "danger"}
                 >
-                  {atleta.variacao_num > 0 ? "+" : ""}
-                  {formatCurrency(atleta.variacao_num)}
+                  {(atleta.variacao ?? 0) > 0 ? "+" : ""}
+                  {formatCurrency(atleta.variacao)}
                 </Badge>
               </div>
             ))}
@@ -188,11 +188,11 @@ export default function DashboardPage() {
                       {atleta.apelido}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {formatCurrency(atleta.preco_num)}
+                      {formatCurrency(atleta.preco)}
                     </p>
                   </div>
                 </div>
-                <Badge>{formatNumber(atleta.media_num)} pts/C$</Badge>
+                <Badge>{formatNumber(atleta.media)} pts/C$</Badge>
               </div>
             ))}
           </div>

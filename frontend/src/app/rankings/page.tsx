@@ -5,7 +5,7 @@ import {
   getRankingPontuadores,
   getRankingValorizacoes,
   getRankingCustoBeneficio,
-  type Atleta,
+  type RankingAtleta,
 } from "@/lib/api";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -17,7 +17,7 @@ type Tab = "pontuadores" | "valorizacoes" | "custo-beneficio";
 
 export default function RankingsPage() {
   const [tab, setTab] = useState<Tab>("pontuadores");
-  const [data, setData] = useState<Atleta[]>([]);
+  const [data, setData] = useState<RankingAtleta[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -88,7 +88,7 @@ export default function RankingsPage() {
               <tbody>
                 {data.map((atleta, i) => (
                   <tr
-                    key={atleta.id}
+                    key={atleta.atleta_id}
                     className="border-b border-border/50 hover:bg-muted/50"
                   >
                     <td className="py-3">
@@ -102,7 +102,7 @@ export default function RankingsPage() {
                     </td>
                     <td className="py-3">
                       <Link
-                        href={`/atletas/${atleta.id}`}
+                        href={`/atletas/${atleta.atleta_id}`}
                         className="font-medium text-foreground hover:text-primary"
                       >
                         {atleta.apelido}
@@ -112,30 +112,30 @@ export default function RankingsPage() {
                       {atleta.clube_nome}
                     </td>
                     <td className="py-3 text-muted-foreground">
-                      {atleta.posicao_nome}
+                      {atleta.posicao}
                     </td>
                     <td className="py-3 font-medium text-foreground">
-                      {formatNumber(atleta.media_num)}
+                      {formatNumber(atleta.media)}
                     </td>
                     <td className="py-3 text-foreground">
-                      {formatCurrency(atleta.preco_num)}
+                      {formatCurrency(atleta.preco)}
                     </td>
                     <td className="py-3">
                       <Badge
                         variant={
-                          atleta.variacao_num > 0
+                          (atleta.variacao ?? 0) > 0
                             ? "success"
-                            : atleta.variacao_num < 0
+                            : (atleta.variacao ?? 0) < 0
                               ? "danger"
                               : "muted"
                         }
                       >
-                        {atleta.variacao_num > 0 ? "+" : ""}
-                        {formatCurrency(atleta.variacao_num)}
+                        {(atleta.variacao ?? 0) > 0 ? "+" : ""}
+                        {formatCurrency(atleta.variacao)}
                       </Badge>
                     </td>
                     <td className="py-3 text-muted-foreground">
-                      {atleta.jogos_num}
+                      {atleta.jogos ?? 0}
                     </td>
                   </tr>
                 ))}
