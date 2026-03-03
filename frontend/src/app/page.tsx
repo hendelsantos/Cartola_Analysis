@@ -115,7 +115,7 @@ export default function DashboardPage() {
           <div className="space-y-3">
             {topPontuadores.map((atleta, i) => (
               <div
-                key={atleta.id}
+                key={atleta.atleta_id}
                 className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2"
               >
                 <div className="flex items-center gap-3">
@@ -144,7 +144,7 @@ export default function DashboardPage() {
           <div className="space-y-3">
             {topValorizacoes.map((atleta, i) => (
               <div
-                key={atleta.id}
+                key={atleta.atleta_id}
                 className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2"
               >
                 <div className="flex items-center gap-3">
@@ -176,7 +176,7 @@ export default function DashboardPage() {
           <div className="space-y-3">
             {topCustoBeneficio.map((atleta, i) => (
               <div
-                key={atleta.id}
+                key={atleta.atleta_id}
                 className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2"
               >
                 <div className="flex items-center gap-3">

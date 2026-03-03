@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     APP_DEBUG: bool = False
     APP_SECRET_KEY: str = "change-me-in-production"
-    APP_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+    APP_CORS_ORIGINS: List[str] = ["*"]
     PORT: int = 8000
 
     # Database - Railway provides DATABASE_URL as postgresql://

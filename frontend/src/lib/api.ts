@@ -1,5 +1,5 @@
-// Use relative paths — Next.js rewrites proxy /api/* to the backend
-const API_BASE = "";
+// NEXT_PUBLIC_ vars are inlined at build time by Next.js
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 async function fetcher<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
