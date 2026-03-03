@@ -24,57 +24,7 @@ from app.models.atleta import Atleta
 from app.models.clube import Clube
 from app.models.posicao import Posicao
 from app.models.scout import ScoutRodada
-
-
-# Official Cartola FC scout point weights
-# Only include scouts that exist in ScoutRodada model
-SCOUT_WEIGHTS = {
-    "gols": 8.0,
-    "assistencias": 5.0,
-    "finalizacao_trave": 3.0,
-    "finalizacao_defendida": 1.2,
-    "finalizacao_fora": 0.8,
-    "faltas_sofridas": 0.5,
-    "desarmes": 1.2,
-    "defesas": 3.0,
-    "saldo_gol": 5.0,
-    "defesa_penalti": 7.0,
-    "vitoria": 1.0,
-    "impedimentos": -0.1,
-    "faltas_cometidas": -0.3,
-    "cartao_amarelo": -1.0,
-    "cartao_vermelho": -3.0,
-    "gol_contra": -5.0,
-    "gols_sofridos": -1.0,
-    "penalti_cometido": -1.0,
-    "passes_errados": -0.3,
-}
-
-SCOUT_LABELS = {
-    "gols": "Gols",
-    "assistencias": "Assistências",
-    "finalizacao_trave": "Fin. Trave",
-    "finalizacao_defendida": "Fin. Defendida",
-    "finalizacao_fora": "Fin. Fora",
-    "faltas_sofridas": "Faltas Sofridas",
-    "desarmes": "Desarmes",
-    "defesas": "Defesas",
-    "saldo_gol": "Saldo de Gol",
-    "defesa_penalti": "Def. Pênalti",
-    "vitoria": "Vitória",
-    "passes_errados": "Passes Errados",
-    "impedimentos": "Impedimentos",
-    "faltas_cometidas": "Faltas Cometidas",
-    "cartao_amarelo": "Cartão Amarelo",
-    "cartao_vermelho": "Cartão Vermelho",
-    "gol_contra": "Gol Contra",
-    "gols_sofridos": "Gols Sofridos",
-    "penalti_cometido": "Pênalti Cometido",
-    "penalti_sofrido": "Pênalti Sofrido",
-}
-
-# Only use scouts that actually exist in the model AND have weights
-ACTIVE_SCOUTS = [k for k in SCOUT_WEIGHTS if SCOUT_WEIGHTS[k] != 0]
+from app.core.scout_weights import SCOUT_WEIGHTS, SCOUT_LABELS, ACTIVE_SCOUTS
 
 
 class MoneyballService:

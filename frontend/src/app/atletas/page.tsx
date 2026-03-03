@@ -6,6 +6,7 @@ import { formatCurrency, formatNumber, cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import {
   Search,
   ChevronLeft,
@@ -36,6 +37,7 @@ export default function AtletasPage() {
   const [data, setData] = useState<AtletaList | null>(null);
   const [clubes, setClubes] = useState<Clube[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [page, setPage] = useState(1);
   const [busca, setBusca] = useState("");
   const [clubeId, setClubeId] = useState<number | undefined>();
@@ -58,6 +60,7 @@ export default function AtletasPage() {
       setData(result);
     } catch (err) {
       console.error(err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -152,6 +155,8 @@ export default function AtletasPage() {
       <Card>
         {loading ? (
           <TableSkeleton rows={10} />
+        ) : error ? (
+          <ErrorAlert onRetry={fetchData} />
         ) : (
           <>
             <div className="overflow-x-auto">

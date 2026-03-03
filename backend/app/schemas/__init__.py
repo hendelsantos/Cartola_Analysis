@@ -13,6 +13,12 @@ from app.schemas.analytics import (
     ClubeAnalyticsResponse,
     EscalacaoOtimizadaResponse,
 )
+from app.schemas.prediction import (
+    PlayerPrediction,
+    LineupResponse,
+    PositionRankingsResponse,
+    ScoutProfileResponse,
+)
 
 __all__ = [
     "ClubeResponse",
@@ -27,4 +33,8 @@ __all__ = [
     "AtletaAnalyticsResponse",
     "ClubeAnalyticsResponse",
     "EscalacaoOtimizadaResponse",
+    "PlayerPrediction",
+    "LineupResponse",
+    "PositionRankingsResponse",
+    "ScoutProfileResponse",
 ]

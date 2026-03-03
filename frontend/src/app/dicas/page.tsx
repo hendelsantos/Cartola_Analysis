@@ -26,42 +26,11 @@ import {
   TipPlayer,
   QuickLineup,
 } from "@/lib/api";
+import { PosBadge, MiniSparkline, POS_COLORS } from "@/components/ui/cartola";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-const POS_COLORS: Record<string, string> = {
-  GOL: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-  LAT: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  ZAG: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-  MEI: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  ATA: "bg-red-500/20 text-red-400 border-red-500/30",
-  TEC: "bg-gray-500/20 text-gray-400 border-gray-500/30",
-};
-
 const POS_ORDER = ["GOL", "ZAG", "LAT", "MEI", "ATA", "TEC"];
-
-function PosBadge({ pos }: { pos: string }) {
-  return (
-    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${POS_COLORS[pos] || POS_COLORS["TEC"]}`}>
-      {pos}
-    </span>
-  );
-}
-
-function MiniSparkline({ data }: { data: number[] }) {
-  if (!data || data.length < 2) return null;
-  const max = Math.max(...data, 1);
-  const min = Math.min(...data, 0);
-  const range = max - min || 1;
-  return (
-    <div className="flex items-end gap-[2px] h-5">
-      {data.map((v, i) => (
-        <div key={i} className={`w-1 rounded-t ${v > 0 ? "bg-emerald-500" : "bg-red-500"}`}
-          style={{ height: `${Math.max(6, ((v - min) / range) * 100)}%` }} />
-      ))}
-    </div>
-  );
-}
 
 function momentumIcon(m: number) {
   if (m > 10) return <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />;

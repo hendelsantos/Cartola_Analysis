@@ -11,6 +11,7 @@ import { formatCurrency, formatNumber } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import Link from "next/link";
 
 type Tab = "pontuadores" | "valorizacoes" | "custo-beneficio";
@@ -19,9 +20,11 @@ export default function RankingsPage() {
   const [tab, setTab] = useState<Tab>("pontuadores");
   const [data, setData] = useState<RankingAtleta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     setLoading(true);
+    setError(false);
     const fetcher =
       tab === "pontuadores"
         ? getRankingPontuadores
@@ -31,7 +34,7 @@ export default function RankingsPage() {
 
     fetcher(50)
       .then(setData)
-      .catch(console.error)
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [tab]);
 
@@ -70,6 +73,8 @@ export default function RankingsPage() {
       <Card>
         {loading ? (
           <TableSkeleton rows={15} />
+        ) : error ? (
+          <ErrorAlert />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

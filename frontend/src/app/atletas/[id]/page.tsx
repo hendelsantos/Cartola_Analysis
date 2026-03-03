@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import {
   BarChart,
   Bar,
@@ -40,16 +41,23 @@ export default function AtletaDetailPage() {
   const [atleta, setAtleta] = useState<Atleta | null>(null);
   const [analytics, setAnalytics] = useState<AtletaAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const loadData = () => {
     if (!atletaId) return;
+    setLoading(true);
+    setError(false);
     Promise.all([getAtleta(atletaId), getAtletaAnalytics(atletaId)])
       .then(([a, an]) => {
         setAtleta(a);
         setAnalytics(an);
       })
-      .catch(console.error)
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadData();
   }, [atletaId]);
 
   if (loading) {
@@ -65,6 +73,9 @@ export default function AtletaDetailPage() {
   }
 
   if (!atleta || !analytics) {
+    if (error) {
+      return <ErrorAlert onRetry={loadData} />;
+    }
     return (
       <div className="text-center text-muted-foreground">
         Atleta não encontrado.

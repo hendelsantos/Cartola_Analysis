@@ -17,6 +17,7 @@ from app.models.clube import Clube
 from app.models.posicao import Posicao
 from app.models.partida import Partida
 from app.models.mercado import MercadoStatus
+from app.core.scout_weights import SCOUT_WEIGHTS as _WEIGHTS
 
 logger = structlog.get_logger()
 
@@ -34,29 +35,8 @@ FORMATIONS = {
 # Position ID to abbreviation mapping
 POS_MAP = {1: "gol", 2: "lat", 3: "zag", 4: "mei", 5: "ata", 6: "tec"}
 
-# Scout score weights (official Cartola FC scoring)
-SCOUT_POINTS = {
-    "gols": 8.0,
-    "assistencias": 5.0,
-    "finalizacao_trave": 3.0,
-    "finalizacao_defendida": 1.2,
-    "finalizacao_fora": 0.8,
-    "faltas_sofridas": 0.5,
-    "faltas_cometidas": -0.5,
-    "cartao_amarelo": -2.0,
-    "cartao_vermelho": -5.0,
-    "impedimentos": -0.5,
-    "desarmes": 1.5,
-    "defesas": 3.0,
-    "gols_sofridos": -2.0,
-    "saldo_gol": 5.0,
-    "defesa_penalti": 7.0,
-    "gol_contra": -5.0,
-    "penalti_cometido": -4.0,
-    "penalti_sofrido": 1.0,
-    "vitoria": 1.0,
-    "passes_errados": -0.3,
-}
+# Scout score weights (from shared module)
+SCOUT_POINTS = _WEIGHTS
 
 
 class PredictionService:

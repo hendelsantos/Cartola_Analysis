@@ -1,7 +1,11 @@
 from sqlalchemy import Integer, Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database import Base
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class MercadoStatus(Base):
@@ -15,7 +19,7 @@ class MercadoStatus(Base):
     times_escalados: Mapped[int] = mapped_column(Integer, default=0)
     fechamento_timestamp: Mapped[int | None] = mapped_column(Integer, nullable=True)
     atualizado_em: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=_utcnow, onupdate=_utcnow
     )
 
     @property

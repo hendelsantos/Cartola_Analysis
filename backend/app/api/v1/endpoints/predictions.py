@@ -1,6 +1,12 @@
 from fastapi import APIRouter, Depends, Query
 from app.core.dependencies import get_prediction_service
 from app.services.prediction_service import PredictionService
+from app.schemas.prediction import (
+    PlayerPrediction,
+    LineupResponse,
+    PositionRankingsResponse,
+    ScoutProfileResponse,
+)
 
 router = APIRouter()
 
@@ -35,7 +41,7 @@ async def predict_by_position(
     return await service.predict_by_position(posicao_id, limit=limit)
 
 
-@router.get("/position-rankings")
+@router.get("/position-rankings", response_model=PositionRankingsResponse)
 async def position_rankings(
     limit: int = Query(15, ge=1, le=50),
     service: PredictionService = Depends(get_prediction_service),
@@ -44,7 +50,7 @@ async def position_rankings(
     return await service.get_position_rankings(limit=limit)
 
 
-@router.get("/scout-profile/{atleta_id}")
+@router.get("/scout-profile/{atleta_id}", response_model=ScoutProfileResponse)
 async def scout_profile(
     atleta_id: int,
     service: PredictionService = Depends(get_prediction_service),
@@ -53,11 +59,11 @@ async def scout_profile(
     return await service.get_player_scout_profile(atleta_id)
 
 
-@router.post("/lineup")
+@router.post("/lineup", response_model=LineupResponse)
 async def build_lineup(
     budget: float = Query(140.0, ge=50, le=300),
     formation: str = Query("4-4-2"),
-    strategy: str = Query("balanced", regex="^(balanced|aggressive|conservative|value)$"),
+    strategy: str = Query("balanced", pattern="^(balanced|aggressive|conservative|value)$"),
     service: PredictionService = Depends(get_prediction_service),
 ):
     """

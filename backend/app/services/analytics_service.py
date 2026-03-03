@@ -3,12 +3,14 @@
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
+from sqlalchemy.orm import selectinload
 from statistics import mean, stdev
 
 from app.models.atleta import Atleta
 from app.models.scout import ScoutRodada
 from app.models.clube import Clube
 from app.models.posicao import Posicao
+from app.models.partida import Partida
 from app.schemas.analytics import (
     AtletaAnalyticsResponse,
     ClubeAnalyticsResponse,
@@ -28,13 +30,15 @@ class AnalyticsService:
     # ──────────────────────────────────────────────
 
     async def get_atleta_analytics(self, atleta_id: int) -> AtletaAnalyticsResponse:
-        # Fetch atleta
-        atleta = await self.db.get(Atleta, atleta_id)
+        # Fetch atleta with relationships in a single query
+        result = await self.db.execute(
+            select(Atleta)
+            .options(selectinload(Atleta.clube), selectinload(Atleta.posicao))
+            .where(Atleta.id == atleta_id)
+        )
+        atleta = result.scalars().first()
         if not atleta:
             raise ValueError(f"Atleta {atleta_id} não encontrado")
-
-        clube = await self.db.get(Clube, atleta.clube_id)
-        posicao = await self.db.get(Posicao, atleta.posicao_id)
 
         # Fetch all scout history
         result = await self.db.execute(
@@ -104,8 +108,8 @@ class AnalyticsService:
         return AtletaAnalyticsResponse(
             atleta_id=atleta.id,
             apelido=atleta.apelido,
-            clube_nome=clube.nome_fantasia if clube else "",
-            posicao=posicao.nome if posicao else "",
+            clube_nome=atleta.clube.nome_fantasia if atleta.clube else "",
+            posicao=atleta.posicao.nome if atleta.posicao else "",
             foto=atleta.foto,
             media_pontos=round(media_pontos, 2),
             desvio_padrao=round(dp, 2),
@@ -141,7 +145,7 @@ class AnalyticsService:
         total_gs = sum(s.gols_sofridos for s in scouts)
         total_sg = sum(s.saldo_gol for s in scouts)
 
-        # Atletas do clube
+        # Atletas do clube (single query with relationships)
         result = await self.db.execute(
             select(Atleta).where(Atleta.clube_id == clube_id)
         )
@@ -153,9 +157,70 @@ class AnalyticsService:
         # Best players
         atletas_com_jogos = [a for a in atletas if a.jogos_num > 0]
         melhor_media = None
+        melhor_goleador = None
+        melhor_assistente = None
         if atletas_com_jogos:
             best = max(atletas_com_jogos, key=lambda a: a.media_num)
             melhor_media = {"apelido": best.apelido, "media": best.media_num}
+
+        # Aggregate goals and assists per player from scouts
+        from collections import defaultdict
+        gols_por_atleta: dict[int, int] = defaultdict(int)
+        assists_por_atleta: dict[int, int] = defaultdict(int)
+        for s in scouts:
+            gols_por_atleta[s.atleta_id] += s.gols
+            assists_por_atleta[s.atleta_id] += s.assistencias
+
+        atleta_map = {a.id: a for a in atletas}
+        if gols_por_atleta:
+            top_goleador_id = max(gols_por_atleta, key=gols_por_atleta.get)  # type: ignore
+            if top_goleador_id in atleta_map and gols_por_atleta[top_goleador_id] > 0:
+                melhor_goleador = {
+                    "apelido": atleta_map[top_goleador_id].apelido,
+                    "gols": gols_por_atleta[top_goleador_id],
+                }
+        if assists_por_atleta:
+            top_assist_id = max(assists_por_atleta, key=assists_por_atleta.get)  # type: ignore
+            if top_assist_id in atleta_map and assists_por_atleta[top_assist_id] > 0:
+                melhor_assistente = {
+                    "apelido": atleta_map[top_assist_id].apelido,
+                    "assistencias": assists_por_atleta[top_assist_id],
+                }
+
+        # Forma e aproveitamento (últimas 5 partidas)
+        result = await self.db.execute(
+            select(Partida)
+            .where(
+                (Partida.clube_casa_id == clube_id) | (Partida.clube_visitante_id == clube_id),
+                Partida.valida == True,
+                Partida.placar_oficial_mandante != None,
+            )
+            .order_by(desc(Partida.rodada_id))
+            .limit(5)
+        )
+        ultimas_partidas = result.scalars().all()
+
+        forma = []
+        pontos_ganhos = 0
+        for p in ultimas_partidas:
+            if p.clube_casa_id == clube_id:
+                gm, gv = p.placar_oficial_mandante or 0, p.placar_oficial_visitante or 0
+            else:
+                gm, gv = p.placar_oficial_visitante or 0, p.placar_oficial_mandante or 0
+            if gm > gv:
+                forma.append("V")
+                pontos_ganhos += 3
+            elif gm == gv:
+                forma.append("E")
+                pontos_ganhos += 1
+            else:
+                forma.append("D")
+
+        aproveitamento = (
+            round(pontos_ganhos / (len(ultimas_partidas) * 3) * 100, 1)
+            if ultimas_partidas
+            else 0.0
+        )
 
         return ClubeAnalyticsResponse(
             clube_id=clube.id,
@@ -168,6 +233,10 @@ class AnalyticsService:
             total_gols_sofridos=total_gs,
             total_saldo_gol=total_sg,
             melhor_media=melhor_media,
+            melhor_goleador=melhor_goleador,
+            melhor_assistente=melhor_assistente,
+            forma=forma,
+            aproveitamento=aproveitamento,
         )
 
     # ──────────────────────────────────────────────
@@ -177,86 +246,81 @@ class AnalyticsService:
     async def get_top_pontuadores(self, limit: int = 20) -> list[dict]:
         result = await self.db.execute(
             select(Atleta)
+            .options(selectinload(Atleta.clube), selectinload(Atleta.posicao))
             .where(Atleta.jogos_num > 0)
             .order_by(desc(Atleta.media_num))
             .limit(limit)
         )
-        atletas = result.scalars().all()
+        atletas = result.scalars().unique().all()
 
-        rankings = []
-        for a in atletas:
-            clube = await self.db.get(Clube, a.clube_id)
-            posicao = await self.db.get(Posicao, a.posicao_id)
-            rankings.append(
-                {
-                    "atleta_id": a.id,
-                    "apelido": a.apelido,
-                    "foto": a.foto,
-                    "clube_nome": clube.nome_fantasia if clube else "",
-                    "clube_escudo": clube.escudo_30 if clube else "",
-                    "posicao": posicao.abreviacao if posicao else "",
-                    "media": a.media_num,
-                    "preco": a.preco_num,
-                    "jogos": a.jogos_num,
-                    "pontos": a.pontos_num,
-                    "variacao": a.variacao_num,
-                    "pontos_por_cartoleta": round(
-                        a.media_num / a.preco_num if a.preco_num > 0 else 0, 2
-                    ),
-                }
-            )
-        return rankings
+        return [
+            {
+                "atleta_id": a.id,
+                "apelido": a.apelido,
+                "foto": a.foto,
+                "clube_nome": a.clube.nome_fantasia if a.clube else "",
+                "clube_escudo": a.clube.escudo_30 if a.clube else "",
+                "posicao": a.posicao.abreviacao if a.posicao else "",
+                "media": a.media_num,
+                "preco": a.preco_num,
+                "jogos": a.jogos_num,
+                "pontos": a.pontos_num,
+                "variacao": a.variacao_num,
+                "pontos_por_cartoleta": round(
+                    a.media_num / a.preco_num if a.preco_num > 0 else 0, 2
+                ),
+            }
+            for a in atletas
+        ]
 
     async def get_top_valorizacoes(self, limit: int = 20) -> list[dict]:
         result = await self.db.execute(
             select(Atleta)
+            .options(selectinload(Atleta.clube))
             .where(Atleta.jogos_num > 0)
             .order_by(desc(Atleta.variacao_num))
             .limit(limit)
         )
-        atletas = result.scalars().all()
+        atletas = result.scalars().unique().all()
 
-        rankings = []
-        for a in atletas:
-            clube = await self.db.get(Clube, a.clube_id)
-            rankings.append(
-                {
-                    "atleta_id": a.id,
-                    "apelido": a.apelido,
-                    "foto": a.foto,
-                    "clube_nome": clube.nome_fantasia if clube else "",
-                    "clube_escudo": clube.escudo_30 if clube else "",
-                    "media": a.media_num,
-                    "preco": a.preco_num,
-                    "variacao": a.variacao_num,
-                }
-            )
-        return rankings
+        return [
+            {
+                "atleta_id": a.id,
+                "apelido": a.apelido,
+                "foto": a.foto,
+                "clube_nome": a.clube.nome_fantasia if a.clube else "",
+                "clube_escudo": a.clube.escudo_30 if a.clube else "",
+                "media": a.media_num,
+                "preco": a.preco_num,
+                "variacao": a.variacao_num,
+            }
+            for a in atletas
+        ]
 
     async def get_custo_beneficio(self, limit: int = 20) -> list[dict]:
         result = await self.db.execute(
-            select(Atleta).where(Atleta.jogos_num > 0, Atleta.preco_num > 0)
+            select(Atleta)
+            .options(selectinload(Atleta.clube), selectinload(Atleta.posicao))
+            .where(Atleta.jogos_num > 0, Atleta.preco_num > 0)
         )
-        atletas = result.scalars().all()
+        atletas = result.scalars().unique().all()
 
-        scored = []
-        for a in atletas:
-            ppc = a.media_num / a.preco_num if a.preco_num > 0 else 0
-            clube = await self.db.get(Clube, a.clube_id)
-            posicao = await self.db.get(Posicao, a.posicao_id)
-            scored.append(
-                {
-                    "atleta_id": a.id,
-                    "apelido": a.apelido,
-                    "foto": a.foto,
-                    "clube_nome": clube.nome_fantasia if clube else "",
-                    "clube_escudo": clube.escudo_30 if clube else "",
-                    "posicao": posicao.abreviacao if posicao else "",
-                    "media": a.media_num,
-                    "preco": a.preco_num,
-                    "pontos_por_cartoleta": round(ppc, 2),
-                }
-            )
+        scored = [
+            {
+                "atleta_id": a.id,
+                "apelido": a.apelido,
+                "foto": a.foto,
+                "clube_nome": a.clube.nome_fantasia if a.clube else "",
+                "clube_escudo": a.clube.escudo_30 if a.clube else "",
+                "posicao": a.posicao.abreviacao if a.posicao else "",
+                "media": a.media_num,
+                "preco": a.preco_num,
+                "pontos_por_cartoleta": round(
+                    a.media_num / a.preco_num if a.preco_num > 0 else 0, 2
+                ),
+            }
+            for a in atletas
+        ]
 
         scored.sort(key=lambda x: x["pontos_por_cartoleta"], reverse=True)
         return scored[:limit]

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.partida import Partida
@@ -15,17 +16,22 @@ async def list_partidas(
     rodada_id: int | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Partida).order_by(Partida.partida_data)
+    query = (
+        select(Partida)
+        .options(
+            selectinload(Partida.clube_casa),
+            selectinload(Partida.clube_visitante),
+        )
+        .order_by(Partida.partida_data)
+    )
     if rodada_id:
         query = query.where(Partida.rodada_id == rodada_id)
 
     result = await db.execute(query)
-    partidas = result.scalars().all()
+    partidas = result.scalars().unique().all()
 
     response_list = []
     for p in partidas:
-        casa = await db.get(Clube, p.clube_casa_id)
-        visitante = await db.get(Clube, p.clube_visitante_id)
         resp = PartidaResponse(
             id=p.id,
             rodada_id=p.rodada_id,
@@ -40,8 +46,8 @@ async def list_partidas(
             valida=p.valida,
             aproveitamento_mandante=p.aproveitamento_mandante,
             aproveitamento_visitante=p.aproveitamento_visitante,
-            clube_casa_nome=casa.nome_fantasia if casa else None,
-            clube_visitante_nome=visitante.nome_fantasia if visitante else None,
+            clube_casa_nome=p.clube_casa.nome_fantasia if p.clube_casa else None,
+            clube_visitante_nome=p.clube_visitante.nome_fantasia if p.clube_visitante else None,
         )
         response_list.append(resp)
 

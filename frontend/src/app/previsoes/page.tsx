@@ -12,6 +12,7 @@ import {
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import {
   TrendingUp,
   BarChart3,
@@ -541,15 +542,6 @@ export default function PrevisoesPage() {
           </table>
         </div>
       </Card>
-    </div>
-  );
-}
-
-function CardSkeleton() {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="mb-2 h-4 w-24 animate-pulse rounded bg-muted"></div>
-      <div className="h-8 w-32 animate-pulse rounded bg-muted"></div>
     </div>
   );
 }

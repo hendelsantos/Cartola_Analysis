@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import { ArrowLeft, Users, Target, Crosshair, UserCheck } from "lucide-react";
 import Link from "next/link";
 
@@ -22,9 +23,12 @@ export default function ClubeDetailPage() {
   const [analytics, setAnalytics] = useState<ClubeAnalytics | null>(null);
   const [atletas, setAtletas] = useState<Atleta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const loadData = () => {
     if (!clubeId) return;
+    setLoading(true);
+    setError(false);
     Promise.all([
       getClubeAnalytics(clubeId),
       getAtletas({ clube_id: clubeId, per_page: 50, ordem: "media", direcao: "desc" }),
@@ -33,8 +37,12 @@ export default function ClubeDetailPage() {
         setAnalytics(an);
         setAtletas(at.atletas);
       })
-      .catch(console.error)
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadData();
   }, [clubeId]);
 
   if (loading) {
@@ -50,6 +58,10 @@ export default function ClubeDetailPage() {
   }
 
   if (!analytics) return <p className="text-muted-foreground">Clube não encontrado.</p>;
+
+  if (error) {
+    return <ErrorAlert onRetry={loadData} />;
+  }
 
   return (
     <div className="space-y-6">

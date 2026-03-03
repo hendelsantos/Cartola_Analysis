@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.atleta import Atleta
@@ -19,6 +20,29 @@ STATUS_MAP = {
 }
 
 
+def _atleta_to_response(a: Atleta) -> AtletaResponse:
+    """Convert an Atleta (with loaded relationships) to AtletaResponse."""
+    return AtletaResponse(
+        id=a.id,
+        slug=a.slug,
+        apelido=a.apelido,
+        apelido_abreviado=a.apelido_abreviado,
+        nome=a.nome,
+        foto=a.foto,
+        clube_id=a.clube_id,
+        posicao_id=a.posicao_id,
+        status_id=a.status_id,
+        pontos_num=a.pontos_num,
+        media_num=a.media_num,
+        preco_num=a.preco_num,
+        variacao_num=a.variacao_num,
+        jogos_num=a.jogos_num,
+        entrou_em_campo=a.entrou_em_campo,
+        clube_nome=a.clube.nome_fantasia if a.clube else None,
+        posicao_nome=a.posicao.nome if a.posicao else None,
+    )
+
+
 @router.get("", response_model=AtletaListResponse)
 async def list_atletas(
     page: int = Query(1, ge=1),
@@ -26,12 +50,15 @@ async def list_atletas(
     clube_id: int | None = None,
     posicao_id: int | None = None,
     status_id: int | None = None,
-    ordem: str = Query("media", regex="^(media|preco|pontos|variacao|jogos)$"),
-    direcao: str = Query("desc", regex="^(asc|desc)$"),
+    ordem: str = Query("media", pattern="^(media|preco|pontos|variacao|jogos)$"),
+    direcao: str = Query("desc", pattern="^(asc|desc)$"),
     busca: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Atleta)
+    query = select(Atleta).options(
+        selectinload(Atleta.clube),
+        selectinload(Atleta.posicao),
+    )
 
     # Filters
     if clube_id:
@@ -43,8 +70,18 @@ async def list_atletas(
     if busca:
         query = query.where(Atleta.apelido.ilike(f"%{busca}%"))
 
-    # Count
-    count_query = select(func.count()).select_from(query.subquery())
+    # Count (no need to load relationships for count)
+    count_base = select(Atleta.id)
+    if clube_id:
+        count_base = count_base.where(Atleta.clube_id == clube_id)
+    if posicao_id:
+        count_base = count_base.where(Atleta.posicao_id == posicao_id)
+    if status_id:
+        count_base = count_base.where(Atleta.status_id == status_id)
+    if busca:
+        count_base = count_base.where(Atleta.apelido.ilike(f"%{busca}%"))
+    count_query = select(func.count()).select_from(count_base.subquery())
+
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
 
@@ -67,64 +104,25 @@ async def list_atletas(
     query = query.offset(offset).limit(per_page)
 
     result = await db.execute(query)
-    atletas = result.scalars().all()
-
-    # Enrich with club and position names
-    response_list = []
-    for a in atletas:
-        clube = await db.get(Clube, a.clube_id)
-        posicao = await db.get(Posicao, a.posicao_id)
-        resp = AtletaResponse(
-            id=a.id,
-            slug=a.slug,
-            apelido=a.apelido,
-            apelido_abreviado=a.apelido_abreviado,
-            nome=a.nome,
-            foto=a.foto,
-            clube_id=a.clube_id,
-            posicao_id=a.posicao_id,
-            status_id=a.status_id,
-            pontos_num=a.pontos_num,
-            media_num=a.media_num,
-            preco_num=a.preco_num,
-            variacao_num=a.variacao_num,
-            jogos_num=a.jogos_num,
-            entrou_em_campo=a.entrou_em_campo,
-            clube_nome=clube.nome_fantasia if clube else None,
-            posicao_nome=posicao.nome if posicao else None,
-        )
-        response_list.append(resp)
+    atletas = result.scalars().unique().all()
 
     return AtletaListResponse(
-        atletas=response_list, total=total, page=page, per_page=per_page
+        atletas=[_atleta_to_response(a) for a in atletas],
+        total=total,
+        page=page,
+        per_page=per_page,
     )
 
 
 @router.get("/{atleta_id}", response_model=AtletaResponse)
 async def get_atleta(atleta_id: int, db: AsyncSession = Depends(get_db)):
-    atleta = await db.get(Atleta, atleta_id)
+    result = await db.execute(
+        select(Atleta)
+        .options(selectinload(Atleta.clube), selectinload(Atleta.posicao))
+        .where(Atleta.id == atleta_id)
+    )
+    atleta = result.scalars().first()
     if not atleta:
         raise HTTPException(status_code=404, detail="Atleta não encontrado")
 
-    clube = await db.get(Clube, atleta.clube_id)
-    posicao = await db.get(Posicao, atleta.posicao_id)
-
-    return AtletaResponse(
-        id=atleta.id,
-        slug=atleta.slug,
-        apelido=atleta.apelido,
-        apelido_abreviado=atleta.apelido_abreviado,
-        nome=atleta.nome,
-        foto=atleta.foto,
-        clube_id=atleta.clube_id,
-        posicao_id=atleta.posicao_id,
-        status_id=atleta.status_id,
-        pontos_num=atleta.pontos_num,
-        media_num=atleta.media_num,
-        preco_num=atleta.preco_num,
-        variacao_num=atleta.variacao_num,
-        jogos_num=atleta.jogos_num,
-        entrou_em_campo=atleta.entrou_em_campo,
-        clube_nome=clube.nome_fantasia if clube else None,
-        posicao_nome=posicao.nome if posicao else None,
-    )
+    return _atleta_to_response(atleta)

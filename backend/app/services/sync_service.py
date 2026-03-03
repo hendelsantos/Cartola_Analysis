@@ -1,7 +1,7 @@
 """Service for syncing data from Cartola API to the database."""
 
 import structlog
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy import select
@@ -285,7 +285,7 @@ class SyncService:
             game_over=data.get("game_over", False),
             times_escalados=data.get("times_escalados", 0),
             fechamento_timestamp=fechamento.get("timestamp"),
-            atualizado_em=datetime.utcnow(),
+            atualizado_em=datetime.now(timezone.utc),
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=["id"],
@@ -296,7 +296,7 @@ class SyncService:
                 "game_over": data.get("game_over", False),
                 "times_escalados": data.get("times_escalados", 0),
                 "fechamento_timestamp": fechamento.get("timestamp"),
-                "atualizado_em": datetime.utcnow(),
+                "atualizado_em": datetime.now(timezone.utc),
             },
         )
         await self.db.execute(stmt)

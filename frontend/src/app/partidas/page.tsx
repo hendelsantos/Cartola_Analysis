@@ -5,6 +5,7 @@ import { getPartidas, getRodadas, type Partida, type Rodada } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import { Calendar, MapPin } from "lucide-react";
 
 export default function PartidasPage() {
@@ -12,6 +13,7 @@ export default function PartidasPage() {
   const [rodadas, setRodadas] = useState<Rodada[]>([]);
   const [rodadaSelecionada, setRodadaSelecionada] = useState<number | undefined>();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     getRodadas()
@@ -21,9 +23,10 @@ export default function PartidasPage() {
 
   useEffect(() => {
     setLoading(true);
+    setError(false);
     getPartidas(rodadaSelecionada)
       .then((r) => setPartidas(r.partidas))
-      .catch(console.error)
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [rodadaSelecionada]);
 
@@ -63,6 +66,8 @@ export default function PartidasPage() {
             <CardSkeleton key={i} />
           ))}
         </div>
+      ) : error ? (
+        <ErrorAlert />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {partidas.map((p) => {

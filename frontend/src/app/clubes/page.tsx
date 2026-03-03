@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getClubes, type Clube } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import Link from "next/link";
 import Image from "next/image";
 import { Shield } from "lucide-react";
@@ -11,12 +12,19 @@ import { Shield } from "lucide-react";
 export default function ClubesPage() {
   const [clubes, setClubes] = useState<Clube[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
+    setError(false);
     getClubes()
       .then((r) => setClubes(r.clubes))
-      .catch(console.error)
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   if (loading) {
@@ -28,6 +36,15 @@ export default function ClubesPage() {
             <CardSkeleton key={i} />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-foreground">Clubes</h1>
+        <ErrorAlert onRetry={loadData} />
       </div>
     );
   }

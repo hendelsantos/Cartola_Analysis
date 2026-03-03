@@ -7,7 +7,7 @@ class Clube(Base):
     __tablename__ = "clubes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    nome: Mapped[str] = mapped_column(String(10), nullable=False)
+    nome: Mapped[str] = mapped_column(String(100), nullable=False)
     abreviacao: Mapped[str] = mapped_column(String(10), nullable=False)
     slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
     apelido: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -19,19 +19,19 @@ class Clube(Base):
 
     # Relationships
     atletas: Mapped[list["Atleta"]] = relationship(
-        "Atleta", back_populates="clube", lazy="selectin"
+        "Atleta", back_populates="clube", lazy="raise"
     )
     partidas_mandante: Mapped[list["Partida"]] = relationship(
         "Partida",
         foreign_keys="Partida.clube_casa_id",
         back_populates="clube_casa",
-        lazy="selectin",
+        lazy="raise",
     )
     partidas_visitante: Mapped[list["Partida"]] = relationship(
         "Partida",
         foreign_keys="Partida.clube_visitante_id",
         back_populates="clube_visitante",
-        lazy="selectin",
+        lazy="raise",
     )
 
     def __repr__(self) -> str:

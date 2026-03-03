@@ -6,6 +6,7 @@ import { formatCurrency, formatNumber, cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import {
   BarChart,
   Bar,
@@ -20,12 +21,19 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 export default function ValorizacoesPage() {
   const [atletas, setAtletas] = useState<Atleta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
+    setError(false);
     getAtletas({ per_page: 50, ordem: "variacao", direcao: "desc" })
       .then((r) => setAtletas(r.atletas))
-      .catch(console.error)
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   const top15 = atletas.slice(0, 15);
@@ -39,6 +47,15 @@ export default function ValorizacoesPage() {
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">Valorizações</h1>
         <TableSkeleton rows={10} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-foreground">Valorizações</h1>
+        <ErrorAlert onRetry={loadData} />
       </div>
     );
   }

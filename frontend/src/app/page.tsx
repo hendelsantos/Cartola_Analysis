@@ -14,6 +14,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CardSkeleton, TableSkeleton } from "@/components/ui/skeleton";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import {
   Users,
   Trophy,
@@ -29,8 +30,11 @@ export default function DashboardPage() {
   const [topValorizacoes, setTopValorizacoes] = useState<RankingAtleta[]>([]);
   const [topCustoBeneficio, setTopCustoBeneficio] = useState<RankingAtleta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
+    setError(false);
     Promise.all([
       getMercadoStatus(),
       getRankingPontuadores(10),
@@ -43,8 +47,12 @@ export default function DashboardPage() {
         setTopValorizacoes(tv);
         setTopCustoBeneficio(tcb);
       })
-      .catch(console.error)
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   if (loading) {
@@ -64,6 +72,10 @@ export default function DashboardPage() {
         </div>
       </div>
     );
+  }
+
+  if (error) {
+    return <ErrorAlert onRetry={loadData} />;
   }
 
   return (
