@@ -82,6 +82,41 @@ export async function triggerSync() {
   return fetcher("/api/v1/sync/full", { method: "POST" });
 }
 
+// ── Predictions ─────────────────────────────────────────────────
+export async function getPrediction(atletaId: number) {
+  return fetcher<PlayerPrediction>(`/api/v1/predictions/player/${atletaId}`);
+}
+
+export async function getAllPredictions(limit = 50) {
+  return fetcher<{ predictions: PlayerPrediction[]; total: number }>(
+    `/api/v1/predictions/all?limit=${limit}`
+  );
+}
+
+export async function getPredictionsByPosition(posicaoId: number, limit = 20) {
+  return fetcher<PlayerPrediction[]>(
+    `/api/v1/predictions/position/${posicaoId}?limit=${limit}`
+  );
+}
+
+export async function getPositionRankings() {
+  return fetcher<PositionRankings>(`/api/v1/predictions/position-rankings`);
+}
+
+export async function getScoutProfile(atletaId: number) {
+  return fetcher<ScoutProfileData>(`/api/v1/predictions/scout-profile/${atletaId}`);
+}
+
+export async function buildLineup(params: LineupParams) {
+  const qs = new URLSearchParams();
+  qs.set("budget", String(params.budget || 140));
+  qs.set("formation", params.formation || "4-4-2");
+  qs.set("strategy", params.strategy || "balanced");
+  return fetcher<LineupResponse>(`/api/v1/predictions/lineup?${qs.toString()}`, {
+    method: "POST",
+  });
+}
+
 // ── Types ───────────────────────────────────────────────────────
 export interface MercadoStatus {
   rodada_atual: number;
@@ -217,4 +252,130 @@ export interface RankingAtleta {
   pontos?: number;
   variacao?: number;
   pontos_por_cartoleta?: number;
+}
+
+// ── Prediction Types ────────────────────────────────────────────
+
+export interface PlayerPrediction {
+  atleta_id: number;
+  apelido: string;
+  foto: string | null;
+  clube_nome: string;
+  clube_escudo: string;
+  posicao: string;
+  posicao_nome: string;
+  preco: number;
+  media_geral: number;
+  jogos: number;
+  prediction: {
+    score: number;
+    min_score: number;
+    max_score: number;
+    confidence: number;
+    method_breakdown: {
+      weighted_avg: number;
+      scout_projection: number;
+      historic_avg: number;
+      form_factor: number;
+      opponent_factor: number;
+    };
+  };
+  consistency: {
+    cv: number;
+    desvio_padrao: number;
+    rating: string;
+    acima_media_pct: number;
+    pontuou_positivo_pct: number;
+  };
+  form: {
+    last_5: number[];
+    trend: string;
+    form_factor: number;
+  };
+  risk: {
+    label: string;
+    volatility: number;
+    min_expected: number;
+    max_expected: number;
+  };
+  value: {
+    preco: number;
+    pontos_por_cartoleta: number;
+    rating: string;
+  };
+}
+
+export interface LineupPlayer {
+  atleta_id: number;
+  apelido: string;
+  foto: string | null;
+  clube_nome: string;
+  clube_escudo: string;
+  posicao: string;
+  posicao_nome: string;
+  preco: number;
+  media: number;
+  projecao: number;
+  confidence: number;
+  min_score: number;
+  max_score: number;
+  risk_label: string;
+}
+
+export interface LineupResponse {
+  success: boolean;
+  formation: string;
+  strategy: string;
+  budget: number;
+  total_price: number;
+  remaining_budget: number;
+  total_prediction: number;
+  total_media: number;
+  players_count: number;
+  players: LineupPlayer[];
+  message?: string;
+}
+
+export interface LineupParams {
+  budget?: number;
+  formation?: string;
+  strategy?: string;
+}
+
+export interface PositionRankingPlayer {
+  atleta_id: number;
+  apelido: string;
+  foto: string | null;
+  clube_nome: string;
+  clube_escudo: string;
+  preco: number;
+  media: number;
+  projecao: number;
+  confidence: number;
+  consistency: string;
+  trend: string;
+  value_rating: string;
+}
+
+export interface PositionRankings {
+  [key: string]: {
+    posicao: string;
+    jogadores: PositionRankingPlayer[];
+  };
+}
+
+export interface ScoutProfileData {
+  jogos_analisados: number;
+  profile: {
+    gols: number;
+    assistencias: number;
+    finalizacoes: number;
+    desarmes: number;
+    faltas_sofridas: number;
+    defesas: number;
+    cartoes: number;
+    vitorias_pct: number;
+    saldo_gol_pct: number;
+  };
+  contribution: Record<string, { total: number; points: number; per_game: number }>;
 }

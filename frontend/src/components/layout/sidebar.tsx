@@ -12,6 +12,8 @@ import {
   Calendar,
   RefreshCw,
   TrendingUp,
+  Target,
+  Zap,
 } from "lucide-react";
 
 const navItems = [
@@ -22,6 +24,8 @@ const navItems = [
   { href: "/rankings", label: "Rankings", icon: Trophy },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/valorizacoes", label: "Valorização", icon: TrendingUp },
+  { href: "/previsoes", label: "Previsões", icon: Target },
+  { href: "/escalacao", label: "Escalação", icon: Zap },
 ];
 
 export function Sidebar() {
