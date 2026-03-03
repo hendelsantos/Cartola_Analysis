@@ -77,13 +77,19 @@ export default function EscalacaoPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">
-          Escalação Inteligente
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Monte o melhor time com base em previsões e análises estatísticas
-        </p>
+      <div className="field-pattern relative overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-primary/10 via-card to-card p-5 sm:p-8">
+        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary/5 blur-2xl sm:h-48 sm:w-48" />
+        <div className="relative z-10">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-primary sm:text-xs">
+            Otimização Inteligente
+          </p>
+          <h1 className="mt-1 text-xl font-extrabold text-foreground sm:text-2xl">
+            Escalação Inteligente
+          </h1>
+          <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+            Monte o melhor time com base em previsões e análises estatísticas
+          </p>
+        </div>
       </div>
 
       {/* Configuration */}
@@ -211,28 +217,28 @@ export default function EscalacaoPage() {
       {lineup?.success && (
         <>
           {/* Summary Stats */}
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground">Projeção Total</p>
-              <p className="mt-1 text-2xl font-bold text-primary">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+            <div className="rounded-2xl border border-border/60 bg-card p-3 sm:p-4">
+              <p className="text-[10px] text-muted-foreground sm:text-xs">Projeção Total</p>
+              <p className="mt-1 text-lg font-bold text-primary sm:text-2xl">
                 {formatNumber(lineup.total_prediction)} pts
               </p>
             </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground">Preço Total</p>
-              <p className="mt-1 text-2xl font-bold text-foreground">
+            <div className="rounded-2xl border border-border/60 bg-card p-3 sm:p-4">
+              <p className="text-[10px] text-muted-foreground sm:text-xs">Preço Total</p>
+              <p className="mt-1 text-lg font-bold text-foreground sm:text-2xl">
                 {formatCurrency(lineup.total_price)}
               </p>
             </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground">Sobra</p>
-              <p className="mt-1 text-2xl font-bold text-success">
+            <div className="rounded-2xl border border-border/60 bg-card p-3 sm:p-4">
+              <p className="text-[10px] text-muted-foreground sm:text-xs">Sobra</p>
+              <p className="mt-1 text-lg font-bold text-success sm:text-2xl">
                 {formatCurrency(lineup.remaining_budget)}
               </p>
             </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground">Média Histórica</p>
-              <p className="mt-1 text-2xl font-bold text-foreground">
+            <div className="rounded-2xl border border-border/60 bg-card p-3 sm:p-4">
+              <p className="text-[10px] text-muted-foreground sm:text-xs">Média Histórica</p>
+              <p className="mt-1 text-lg font-bold text-foreground sm:text-2xl">
                 {formatNumber(lineup.total_media)} pts
               </p>
             </div>

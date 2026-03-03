@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getMercadoStatus, type MercadoStatus } from "@/lib/api";
-import { RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { RefreshCw, Wifi, WifiOff, Activity } from "lucide-react";
 
 export function Header() {
   const [mercado, setMercado] = useState<MercadoStatus | null>(null);
@@ -29,39 +29,42 @@ export function Header() {
         : "text-danger";
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-border bg-secondary px-6">
-      <div className="flex items-center gap-4">
-        <h2 className="text-lg font-semibold text-foreground">
+    <header className="flex h-14 items-center justify-between border-b border-border/50 bg-secondary/80 px-4 backdrop-blur-sm sm:h-16 sm:px-6">
+      {/* Spacer for mobile hamburger */}
+      <div className="w-10 lg:hidden" />
+
+      <div className="flex items-center gap-2">
+        <Activity className="hidden h-4 w-4 text-primary sm:block" />
+        <h2 className="text-sm font-semibold text-foreground sm:text-lg">
           Cartola Analytics
         </h2>
       </div>
 
-      <div className="flex items-center gap-6">
-        {/* Status do Mercado */}
+      <div className="flex items-center gap-2 sm:gap-6">
         {loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <RefreshCw className="h-4 w-4 animate-spin" />
-            Carregando...
+          <div className="flex items-center gap-2 text-xs text-muted-foreground sm:text-sm">
+            <RefreshCw className="h-3.5 w-3.5 animate-spin sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Carregando...</span>
           </div>
         ) : mercado ? (
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <Wifi className={`h-4 w-4 ${statusColor}`} />
-              <span className={statusColor}>{mercado.status_label}</span>
+          <div className="flex items-center gap-2 text-xs sm:gap-4 sm:text-sm">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <Wifi className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${statusColor}`} />
+              <span className={`hidden sm:inline ${statusColor}`}>{mercado.status_label}</span>
             </div>
-            <div className="text-muted-foreground">
-              Rodada {mercado.rodada_atual}
+            <div className="rounded-md bg-muted/60 px-2 py-1 text-muted-foreground">
+              R{mercado.rodada_atual}
             </div>
             {mercado.times_escalados > 0 && (
-              <div className="text-muted-foreground">
+              <div className="hidden text-muted-foreground md:block">
                 {mercado.times_escalados.toLocaleString("pt-BR")} times
               </div>
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-sm text-danger">
-            <WifiOff className="h-4 w-4" />
-            API offline
+          <div className="flex items-center gap-1.5 text-xs text-danger sm:gap-2 sm:text-sm">
+            <WifiOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">API offline</span>
           </div>
         )}
       </div>

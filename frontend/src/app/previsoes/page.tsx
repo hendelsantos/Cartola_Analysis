@@ -169,24 +169,30 @@ export default function PrevisoesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">
-          Previsões de Pontuação
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Projeções baseadas em média ponderada, scouts e dificuldade do adversário
-        </p>
+      <div className="field-pattern relative overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-primary/10 via-card to-card p-5 sm:p-8">
+        <div className="absolute -left-8 -bottom-8 h-32 w-32 rounded-full bg-accent/5 blur-2xl sm:h-48 sm:w-48" />
+        <div className="relative z-10">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-primary sm:text-xs">
+            Machine Learning
+          </p>
+          <h1 className="mt-1 text-xl font-extrabold text-foreground sm:text-2xl">
+            Previsões de Pontuação
+          </h1>
+          <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+            Projeções baseadas em média ponderada, scouts e dificuldade do adversário
+          </p>
+        </div>
       </div>
 
       {/* Top 5 Highlight */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {top5.map((p, i) => (
           <div
             key={p.atleta_id}
-            className={`rounded-xl border p-4 ${
+            className={`rounded-2xl border p-3 transition-all duration-300 hover:scale-[1.02] sm:p-4 ${
               i === 0
-                ? "border-primary/50 bg-primary/5"
-                : "border-border bg-card"
+                ? "border-primary/50 bg-gradient-to-br from-primary/10 to-card glow-primary"
+                : "border-border/60 bg-card hover:border-primary/30"
             }`}
           >
             <div className="flex items-center justify-between">
