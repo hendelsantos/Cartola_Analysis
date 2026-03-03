@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import atletas, clubes, partidas, rodadas, mercado, analytics, sync, predictions, moneyball
+from app.api.v1.endpoints import atletas, clubes, partidas, rodadas, mercado, analytics, sync, predictions, moneyball, tips
 
 router = APIRouter(prefix="/v1")
 
@@ -12,3 +12,4 @@ router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
 router.include_router(predictions.router, prefix="/predictions", tags=["Predictions"])
 router.include_router(sync.router, prefix="/sync", tags=["Sync"])
 router.include_router(moneyball.router, prefix="/moneyball", tags=["Moneyball"])
+router.include_router(tips.router, prefix="/dicas", tags=["Dicas"])

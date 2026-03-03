@@ -19,10 +19,12 @@ import {
   X,
   Info,
   CircleDollarSign,
+  Crown,
 } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dicas", label: "Dicas da Rodada", icon: Crown },
   { href: "/atletas", label: "Atletas", icon: Users },
   { href: "/clubes", label: "Clubes", icon: Shield },
   { href: "/partidas", label: "Partidas", icon: Calendar },

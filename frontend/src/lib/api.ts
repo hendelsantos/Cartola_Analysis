@@ -127,6 +127,12 @@ export async function getMoneyballCorrelations() {
   return fetcher<MoneyballCorrelations>(`/api/v1/moneyball/correlations`);
 }
 
+// ── Dicas da Rodada ─────────────────────────────────────────────
+
+export async function getRoundTips(budget: number = 140, formation: string = "4-4-2") {
+  return fetcher<RoundTips>(`/api/v1/dicas/rodada?budget=${budget}&formation=${formation}`);
+}
+
 // ── Types ───────────────────────────────────────────────────────
 export interface MercadoStatus {
   rodada_atual: number;
@@ -477,4 +483,66 @@ export interface PositionCorrelation {
 
 export interface MoneyballCorrelations {
   [position: string]: PositionCorrelation;
+}
+
+// ── Dicas / Tips Types ──────────────────────────────────────────
+
+export interface TipPlayer {
+  atleta_id: number;
+  apelido: string;
+  nome: string;
+  foto: string | null;
+  clube_nome: string;
+  clube_abreviacao: string;
+  posicao: string;
+  posicao_nome: string;
+  preco: number;
+  media: number;
+  xpts: number;
+  alpha: number;
+  consistency: number;
+  momentum: number;
+  avg_last_3: number;
+  floor: number;
+  ceiling: number;
+  regression: number;
+  sharpe: number;
+  variacao: number;
+  points_history: number[];
+  jogos: number;
+  tip_type: string;
+  razoes?: string[];
+}
+
+export interface QuickLineup {
+  formation: string;
+  budget: number;
+  total_price: number;
+  remaining: number;
+  total_xpts: number;
+  players: TipPlayer[];
+  count: number;
+}
+
+export interface RoundTipsSummary {
+  total_analisados: number;
+  jogadores_com_momentum_positivo: number;
+  jogadores_subvalorizados: number;
+  moonshots_disponiveis: number;
+  alertas_evitar: number;
+}
+
+export interface RoundTips {
+  capitao: TipPlayer | null;
+  vice_capitao: TipPlayer | null;
+  picks: Record<string, TipPlayer[]>;
+  moonshots: TipPlayer[];
+  evitar: TipPlayer[];
+  tiers: {
+    baratos: TipPlayer[];
+    medio: TipPlayer[];
+    premium: TipPlayer[];
+  };
+  escalacao: QuickLineup;
+  resumo: RoundTipsSummary;
 }
