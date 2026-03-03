@@ -18,6 +18,7 @@ import {
   Menu,
   X,
   Info,
+  CircleDollarSign,
 } from "lucide-react";
 
 const navItems = [
@@ -30,6 +31,7 @@ const navItems = [
   { href: "/valorizacoes", label: "Valorização", icon: TrendingUp },
   { href: "/previsoes", label: "Previsões", icon: Target },
   { href: "/escalacao", label: "Escalação", icon: Zap },
+  { href: "/moneyball", label: "Moneyball", icon: CircleDollarSign },
   { href: "/sobre", label: "Sobre", icon: Info },
 ];
 

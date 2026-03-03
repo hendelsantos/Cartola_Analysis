@@ -5,6 +5,7 @@ from app.services.cartola_api import cartola_client, CartolaAPIClient
 from app.services.sync_service import SyncService
 from app.services.analytics_service import AnalyticsService
 from app.services.prediction_service import PredictionService
+from app.services.moneyball_service import MoneyballService
 
 
 async def get_sync_service(
@@ -23,6 +24,12 @@ async def get_prediction_service(
     db: AsyncSession = Depends(get_db),
 ) -> PredictionService:
     return PredictionService(db=db)
+
+
+async def get_moneyball_service(
+    db: AsyncSession = Depends(get_db),
+) -> MoneyballService:
+    return MoneyballService(db=db)
 
 
 def get_cartola_client() -> CartolaAPIClient:

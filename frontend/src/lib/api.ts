@@ -117,6 +117,16 @@ export async function buildLineup(params: LineupParams) {
   });
 }
 
+// ── Moneyball API ───────────────────────────────────────────────
+
+export async function getMoneyballAnalysis(minJogos: number = 3) {
+  return fetcher<MoneyballAnalysis>(`/api/v1/moneyball/analysis?min_jogos=${minJogos}`);
+}
+
+export async function getMoneyballCorrelations() {
+  return fetcher<MoneyballCorrelations>(`/api/v1/moneyball/correlations`);
+}
+
 // ── Types ───────────────────────────────────────────────────────
 export interface MercadoStatus {
   rodada_atual: number;
@@ -378,4 +388,93 @@ export interface ScoutProfileData {
     saldo_gol_pct: number;
   };
   contribution: Record<string, { total: number; points: number; per_game: number }>;
+}
+
+// ── Moneyball Types ─────────────────────────────────────────────
+
+export interface MoneyballPlayer {
+  atleta_id: number;
+  apelido: string;
+  nome: string;
+  foto: string | null;
+  clube_nome: string;
+  clube_abreviacao: string;
+  posicao: string;
+  posicao_nome: string;
+  preco: number;
+  media: number;
+  jogos: number;
+  xpts: number;
+  alpha: number;
+  alpha_vs_pos: number;
+  is_undervalued: boolean;
+  value_score: number;
+  std_dev: number;
+  consistency: number;
+  momentum: number;
+  trend_pct: number;
+  avg_last_3: number;
+  avg_last_5: number;
+  pos_pct: number;
+  floor: number;
+  ceiling: number;
+  regression: number;
+  sharpe: number;
+  vic_pct: number;
+  variacao: number;
+  points_history: number[];
+  scout_avgs: Record<string, number>;
+}
+
+export interface MoneyballSummary {
+  total_players: number;
+  avg_alpha: number;
+  undervalued_count: number;
+  gems_count: number;
+  top_alpha: MoneyballPlayerSummary | null;
+  top_gem: MoneyballPlayerSummary | null;
+  top_momentum: MoneyballPlayerSummary | null;
+  most_consistent: MoneyballPlayerSummary | null;
+  biggest_buy_signal: MoneyballPlayerSummary | null;
+  best_sharpe: MoneyballPlayerSummary | null;
+}
+
+export interface MoneyballPlayerSummary {
+  atleta_id: number;
+  apelido: string;
+  clube_nome: string;
+  posicao: string;
+  preco: number;
+  media: number;
+  xpts: number;
+  alpha: number;
+  momentum: number;
+  consistency: number;
+  regression: number;
+  sharpe: number;
+}
+
+export interface MoneyballAnalysis {
+  players: MoneyballPlayer[];
+  summary: MoneyballSummary;
+  position_avg_alpha: Record<string, number>;
+}
+
+export interface ScoutCorrelation {
+  correlation: number;
+  label: string;
+  weight: number;
+  impact: number;
+  avg: number;
+  is_positive: boolean;
+}
+
+export interface PositionCorrelation {
+  posicao_nome: string;
+  sample_size: number;
+  scouts: Record<string, ScoutCorrelation>;
+}
+
+export interface MoneyballCorrelations {
+  [position: string]: PositionCorrelation;
 }
