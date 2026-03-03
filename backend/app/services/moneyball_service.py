@@ -37,12 +37,16 @@ class MoneyballService:
         """Load all players with their per-round scout data and compute analytics.
 
         This is the foundation query — all analysis methods build on this data.
+
+        The min_jogos filter applies to actual scout records in the database.
+        If we have fewer records than min_jogos, we lower the threshold
+        dynamically to always return meaningful results.
         """
-        # Get all players with relationships
+        # Get all players with relationships (any player with games)
         stmt = (
             select(Atleta)
             .options(selectinload(Atleta.clube), selectinload(Atleta.posicao))
-            .where(Atleta.jogos_num >= min_jogos)
+            .where(Atleta.jogos_num >= 1, Atleta.preco_num > 0)
         )
         result = await self.db.execute(stmt)
         players = result.scalars().unique().all()
@@ -67,12 +71,62 @@ class MoneyballService:
         for s in all_scouts:
             scouts_by_player[s.atleta_id].append(s)
 
+        # Determine effective min_jogos: if most players have fewer scout
+        # records than requested, lower the bar so we return results.
+        scout_counts = [len(scouts_by_player.get(p.id, [])) for p in players if scouts_by_player.get(p.id)]
+        if scout_counts:
+            median_count = sorted(scout_counts)[len(scout_counts) // 2]
+            effective_min = min(min_jogos, max(1, median_count))
+        else:
+            effective_min = 1
+
         # Build enriched player analytics
         enriched = []
         for p in players:
             scouts = scouts_by_player.get(p.id, [])
             n = len(scouts)
-            if n < min_jogos:
+
+            if n < effective_min:
+                # Fallback: use atleta-level stats (from API) when
+                # there is no in-database scout history at all.
+                if n == 0 and p.media_num > 0 and p.jogos_num >= min_jogos:
+                    # Create a simplified entry from aggregate API data
+                    price = p.preco_num or 0.01
+                    avg_pts = p.media_num
+                    xpts = avg_pts  # best approximation without scouts
+                    alpha = round(xpts / price, 3) if price > 0 else 0
+
+                    enriched.append({
+                        "atleta_id": p.id,
+                        "apelido": p.apelido,
+                        "nome": p.nome,
+                        "foto": p.foto,
+                        "clube_nome": p.clube.nome_fantasia if p.clube else "?",
+                        "clube_abreviacao": p.clube.abreviacao if p.clube else "?",
+                        "posicao": p.posicao.abreviacao if p.posicao else "?",
+                        "posicao_nome": p.posicao.nome if p.posicao else "?",
+                        "preco": price,
+                        "media": round(avg_pts, 2),
+                        "jogos": p.jogos_num,
+                        "xpts": round(xpts, 2),
+                        "alpha": alpha,
+                        "value_score": round(avg_pts / price, 3) if price > 0 else 0,
+                        "std_dev": 0.0,
+                        "consistency": 50,
+                        "momentum": 0.0,
+                        "trend_pct": 0.0,
+                        "avg_last_3": round(avg_pts, 2),
+                        "avg_last_5": round(avg_pts, 2),
+                        "pos_pct": 50.0,
+                        "floor": 0.0,
+                        "ceiling": round(avg_pts * 2, 2),
+                        "regression": 0.0,
+                        "sharpe": 0.0,
+                        "vic_pct": 0.0,
+                        "variacao": p.variacao_num or 0,
+                        "points_history": [],
+                        "scout_avgs": {},
+                    })
                 continue
 
             # Calculate scout averages
@@ -176,10 +230,11 @@ class MoneyballService:
 
         return enriched
 
-    async def get_full_analysis(self, min_jogos: int = 3):
+    async def get_full_analysis(self, min_jogos: int = 1):
         """Complete Moneyball analysis — all players with all metrics.
 
         The frontend loads this once and filters/sorts client-side for instant tabs.
+        Default min_jogos lowered to 1 so analysis works even on fresh deploys.
         """
         players = await self._load_player_analytics(min_jogos)
 

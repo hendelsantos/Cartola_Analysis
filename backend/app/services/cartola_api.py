@@ -18,6 +18,7 @@ class CartolaAPIClient:
         "mercado_status": "/mercado/status",
         "atletas_mercado": "/atletas/mercado",
         "atletas_pontuados": "/atletas/pontuados",
+        "atletas_pontuados_rodada": "/atletas/pontuados/{rodada}",
         "destaques": "/pos-rodada/destaques",
         "clubes": "/clubes",
         "posicoes": "/posicoes",
@@ -98,6 +99,12 @@ class CartolaAPIClient:
     async def get_partidas_rodada(self, rodada: int) -> dict:
         logger.info("fetching_partidas_rodada", rodada=rodada)
         endpoint = self.ENDPOINTS["partidas_rodada"].format(rodada=rodada)
+        return await self._get(endpoint)
+
+    async def get_atletas_pontuados_rodada(self, rodada: int) -> dict:
+        """Fetch scored athletes for a specific round."""
+        logger.info("fetching_atletas_pontuados_rodada", rodada=rodada)
+        endpoint = self.ENDPOINTS["atletas_pontuados_rodada"].format(rodada=rodada)
         return await self._get(endpoint)
 
     async def get_mercado_destaques(self) -> dict:

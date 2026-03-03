@@ -1,5 +1,10 @@
-// NEXT_PUBLIC_ vars are inlined at build time by Next.js
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+// In production (Railway), the frontend uses Next.js rewrites to proxy /api/* → backend.
+// NEXT_PUBLIC_API_URL is only needed for direct calls (e.g., SSR or non-browser contexts).
+// For client-side, we use relative URLs so the rewrite handles routing.
+const API_BASE =
+  typeof window === "undefined"
+    ? (process.env.NEXT_PUBLIC_API_URL ?? "")  // SSR: direct backend URL
+    : "";  // Browser: relative URL → Next.js rewrites → backend
 
 async function fetcher<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -11,7 +16,8 @@ async function fetcher<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    throw new Error(`API Error: ${res.status} ${res.statusText}`);
+    const body = await res.text().catch(() => "");
+    throw new Error(`API Error: ${res.status} ${res.statusText} ${body}`.trim());
   }
 
   return res.json();
@@ -119,7 +125,7 @@ export async function buildLineup(params: LineupParams) {
 
 // ── Moneyball API ───────────────────────────────────────────────
 
-export async function getMoneyballAnalysis(minJogos: number = 3) {
+export async function getMoneyballAnalysis(minJogos: number = 1) {
   return fetcher<MoneyballAnalysis>(`/api/v1/moneyball/analysis?min_jogos=${minJogos}`);
 }
 

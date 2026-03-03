@@ -4,7 +4,7 @@ import structlog
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.models.clube import Clube
 from app.models.atleta import Atleta
@@ -56,8 +56,116 @@ class SyncService:
         results["atletas"] = await self.sync_atletas()
         results["partidas"] = await self.sync_partidas()
         results["mercado"] = await self.sync_mercado_status()
+        results["historico"] = await self.sync_historical_pontuados()
         logger.info("full_sync_completed", results=results)
         return results
+
+    async def sync_historical_pontuados(self) -> dict:
+        """Sync historical scored players for all past rounds.
+
+        This fills the scouts_rodada table with per-round scout data,
+        which is essential for Moneyball analysis, predictions, etc.
+        """
+        # Get current round
+        try:
+            mercado = await self.api.get_mercado_status()
+            rodada_atual = mercado.get("rodada_atual", 1)
+        except Exception as e:
+            logger.warning("could_not_get_mercado_for_history", error=str(e))
+            return {"synced_rounds": 0, "error": str(e)}
+
+        # Check which rounds already have scout data
+        result = await self.db.execute(
+            select(ScoutRodada.rodada_id)
+            .distinct()
+        )
+        existing_rounds = {row[0] for row in result.fetchall()}
+
+        synced = 0
+        errors = 0
+        # Sync all past rounds that don't have data yet
+        for rodada_id in range(1, rodada_atual):
+            if rodada_id in existing_rounds:
+                continue
+            try:
+                count = await self.sync_pontuados_rodada(rodada_id)
+                if count > 0:
+                    synced += 1
+                    logger.info("synced_historical_round", rodada=rodada_id, players=count)
+            except Exception as e:
+                errors += 1
+                logger.warning("failed_sync_round", rodada=rodada_id, error=str(e))
+
+        logger.info("historical_sync_completed", synced_rounds=synced, errors=errors)
+        return {"synced_rounds": synced, "errors": errors}
+
+    async def sync_pontuados_rodada(self, rodada_id: int) -> int:
+        """Sync scored athletes for a specific round."""
+        try:
+            data = await self.api.get_atletas_pontuados_rodada(rodada_id)
+        except Exception as e:
+            logger.warning("pontuados_fetch_failed", rodada=rodada_id, error=str(e))
+            return 0
+
+        atletas = data.get("atletas", {})
+        if not isinstance(atletas, dict):
+            return 0
+
+        count = 0
+        for atleta_id_str, atl in atletas.items():
+            try:
+                atleta_id = int(atleta_id_str)
+            except (ValueError, TypeError):
+                continue
+
+            scout_data = atl.get("scout", {})
+            if not scout_data:
+                continue
+
+            scout_values = {
+                SCOUT_MAP[k]: v
+                for k, v in scout_data.items()
+                if k in SCOUT_MAP
+            }
+
+            clube_id = atl.get("clube_id", 0)
+            posicao_id = atl.get("posicao_id", 0)
+            pontos = atl.get("pontos_num", 0)
+            entrou = atl.get("entrou_em_campo", pontos != 0)
+
+            if clube_id == 0 or posicao_id == 0:
+                continue
+
+            stmt = pg_insert(ScoutRodada).values(
+                atleta_id=atleta_id,
+                rodada_id=rodada_id,
+                clube_id=clube_id,
+                posicao_id=posicao_id,
+                pontos_num=pontos,
+                preco_num=atl.get("preco_num", 0),
+                variacao_num=atl.get("variacao_num", 0),
+                media_num=atl.get("media_num", 0),
+                entrou_em_campo=entrou,
+                **scout_values,
+            )
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_scout_atleta_rodada",
+                set_={
+                    "pontos_num": pontos,
+                    "preco_num": atl.get("preco_num", 0),
+                    "variacao_num": atl.get("variacao_num", 0),
+                    "media_num": atl.get("media_num", 0),
+                    "entrou_em_campo": entrou,
+                    **scout_values,
+                },
+            )
+            await self.db.execute(stmt)
+            count += 1
+
+        if count > 0:
+            await self.db.commit()
+
+        return count
 
     async def sync_posicoes(self) -> int:
         data = await self.api.get_posicoes()

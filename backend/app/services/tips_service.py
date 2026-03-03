@@ -111,18 +111,32 @@ class TipsService:
     async def get_round_tips(self, budget: float = 140.0, formation: str = "4-4-2"):
         """Generate comprehensive round tips."""
         # Load all player analytics from Moneyball engine
-        mb = await self.moneyball.get_full_analysis(min_jogos=3)
+        # Use min_jogos=1 so it works even with minimal data
+        mb = await self.moneyball.get_full_analysis(min_jogos=1)
         players = mb.get("players", [])
 
         if not players:
-            return {"error": "Sem dados suficientes para gerar dicas"}
+            return {
+                "error": "Sem dados suficientes para gerar dicas. Execute a sincronização primeiro.",
+                "capitao": None,
+                "vice_capitao": None,
+                "picks": {},
+                "moonshots": [],
+                "evitar": [],
+                "tiers": {"baratos": [], "medio": [], "premium": []},
+                "escalacao": {"formation": formation, "budget": budget, "total_price": 0, "remaining": budget, "total_xpts": 0, "players": [], "count": 0},
+                "resumo": {"total_analisados": 0, "jogadores_com_momentum_positivo": 0, "jogadores_subvalorizados": 0, "moonshots_disponiveis": 0, "alertas_evitar": 0},
+            }
 
         # ── 1. Captain & Vice ────────────────────────────
-        # Only consider players with good sample size and positive media
+        # Only consider players with positive media
         captain_candidates = [
             p for p in players
-            if p["jogos"] >= 5 and p["media"] > 2 and p["consistency"] >= 30
+            if p["media"] > 2 and p["consistency"] >= 20
         ]
+        # Relax criteria if too few candidates
+        if len(captain_candidates) < 2:
+            captain_candidates = [p for p in players if p["media"] > 0]
 
         # Score and rank
         for p in captain_candidates:

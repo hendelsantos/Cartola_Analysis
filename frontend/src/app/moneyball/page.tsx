@@ -458,12 +458,15 @@ export default function MoneyballPage() {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      getMoneyballAnalysis(3),
+      getMoneyballAnalysis(1),
       getMoneyballCorrelations(),
     ])
       .then(([a, c]) => {
         setAnalysis(a);
         setCorrelations(c);
+        if (a && (!a.players || a.players.length === 0)) {
+          setError("Nenhum jogador encontrado. Execute a sincronização de dados primeiro (incluindo dados históricos).");
+        }
       })
       .catch(err => setError(err.message || "Erro ao carregar análise"))
       .finally(() => setLoading(false));

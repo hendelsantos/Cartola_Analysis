@@ -7,7 +7,7 @@ router = APIRouter()
 
 @router.post("/full")
 async def sync_all(service: SyncService = Depends(get_sync_service)):
-    """Trigger full data sync from Cartola API."""
+    """Trigger full data sync from Cartola API (includes historical rounds)."""
     results = await service.sync_all()
     return {"status": "ok", "synced": results}
 
@@ -40,3 +40,14 @@ async def sync_partidas(service: SyncService = Depends(get_sync_service)):
 async def sync_mercado(service: SyncService = Depends(get_sync_service)):
     count = await service.sync_mercado_status()
     return {"status": "ok", "count": count}
+
+
+@router.post("/historico")
+async def sync_historico(service: SyncService = Depends(get_sync_service)):
+    """Sync historical scored players for all past rounds.
+
+    Populates scouts_rodada with data from each completed round,
+    enabling Moneyball analysis, predictions, and tips.
+    """
+    result = await service.sync_historical_pontuados()
+    return {"status": "ok", "result": result}

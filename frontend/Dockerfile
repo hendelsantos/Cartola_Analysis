@@ -10,7 +10,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ARG NEXT_PUBLIC_API_URL
+# Build-time: inline NEXT_PUBLIC_* into client bundles
+# If not set, defaults to empty string (uses relative URLs + rewrites)
+ARG NEXT_PUBLIC_API_URL=""
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 RUN npm run build
@@ -31,6 +33,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 
 EXPOSE 3000
+
+# Runtime env — NEXT_PUBLIC_API_URL is used server-side for SSR calls
+# Railway sets PORT automatically
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 

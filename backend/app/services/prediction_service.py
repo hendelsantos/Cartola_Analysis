@@ -144,10 +144,18 @@ class PredictionService:
     # ──────────────────────────────────────────────
 
     async def predict_all_players(self, min_jogos: int = 1) -> list[dict]:
-        """Predict scores for all eligible players."""
+        """Predict scores for all eligible players.
+
+        Does NOT hard-filter by status_id so the lineup builder works
+        even between rounds or when few players are marked 'Provável'.
+        Players with status 7 (Provável) receive a slight boost.
+        """
         result = await self.db.execute(
             select(Atleta)
-            .where(Atleta.jogos_num >= min_jogos, Atleta.status_id == 7)  # 7 = Provável
+            .where(
+                Atleta.jogos_num >= min_jogos,
+                Atleta.preco_num > 0,
+            )
         )
         atletas = result.scalars().all()
 
@@ -170,10 +178,10 @@ class PredictionService:
             .where(
                 Atleta.posicao_id == posicao_id,
                 Atleta.jogos_num > 0,
-                Atleta.status_id == 7,
+                Atleta.preco_num > 0,
             )
             .order_by(desc(Atleta.media_num))
-            .limit(limit * 2)  # Fetch extra for filtering
+            .limit(limit * 3)  # Fetch extra for filtering
         )
         atletas = result.scalars().all()
 
@@ -570,16 +578,23 @@ class PredictionService:
         strategy: str,
     ) -> list[dict] | None:
         """
-        Greedy optimization with backtracking for lineup building.
-        Uses dynamic scoring based on strategy.
+        Budget-aware lineup optimizer with greedy selection + fallback.
+
+        1. Estimates avg budget per player and filters candidates within reach.
+        2. Greedy picks the best affordable player at each slot.
+        3. Falls back to cheapest available when budget is tight.
         """
+        total_slots = sum(formation_slots.values())
+        if total_slots == 0:
+            return None
+
         def score_fn(pred: dict) -> float:
             if strategy == "aggressive":
                 return pred["prediction"]["max_score"]
             elif strategy == "conservative":
                 base = pred["prediction"]["score"]
                 cv = pred["consistency"]["cv"]
-                return base * (1 - cv / 200)  # Penalize inconsistency
+                return base * (1 - cv / 200)
             elif strategy == "value":
                 price = pred["preco"]
                 if price <= 0:
@@ -592,17 +607,16 @@ class PredictionService:
         for pos_key in by_position:
             by_position[pos_key].sort(key=score_fn, reverse=True)
 
-        # Greedy: pick the best available at each position
         lineup = []
         remaining = budget
+        used_ids: set[int] = set()
+        slots_remaining = total_slots
 
         # Process positions in order of scarcity (fewer candidates first)
         position_order = sorted(
             formation_slots.items(),
             key=lambda x: len(by_position.get(x[0], [])),
         )
-
-        used_ids = set()
 
         for pos_key, slots_needed in position_order:
             if slots_needed == 0:
@@ -613,18 +627,27 @@ class PredictionService:
                 if p["atleta_id"] not in used_ids
             ]
 
+            if not candidates:
+                return None  # No candidates for this position at all
+
             selected = 0
+
+            # Calculate max affordable price per remaining slot
+            avg_budget_per_slot = remaining / max(slots_remaining, 1)
+
+            # First pass: pick the best scorers that fit the budget
             for candidate in candidates:
                 if selected >= slots_needed:
                     break
-                if candidate["preco"] <= remaining:
+                if candidate["preco"] <= remaining and candidate["preco"] <= avg_budget_per_slot * 2.5:
                     lineup.append(candidate)
                     remaining -= candidate["preco"]
                     used_ids.add(candidate["atleta_id"])
                     selected += 1
+                    slots_remaining -= 1
 
+            # Second pass: fall back to cheapest available if we couldn't fill slots
             if selected < slots_needed:
-                # Try cheaper alternatives
                 cheap_candidates = sorted(
                     [c for c in candidates if c["atleta_id"] not in used_ids],
                     key=lambda x: x["preco"],
@@ -637,11 +660,12 @@ class PredictionService:
                         remaining -= candidate["preco"]
                         used_ids.add(candidate["atleta_id"])
                         selected += 1
+                        slots_remaining -= 1
 
             if selected < slots_needed:
                 return None  # Can't fill this position
 
-        return lineup if len(lineup) == sum(formation_slots.values()) else None
+        return lineup if len(lineup) == total_slots else None
 
     def _position_order(self, pos: str) -> int:
         """Sort order for positions in lineup display."""
