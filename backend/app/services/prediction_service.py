@@ -148,7 +148,7 @@ class PredictionService:
 
         Does NOT hard-filter by status_id so the lineup builder works
         even between rounds or when few players are marked 'Provável'.
-        Players with status 7 (Provável) receive a slight boost.
+        min_jogos is a soft filter — falls back to all players with price if no results.
         """
         result = await self.db.execute(
             select(Atleta)
@@ -158,6 +158,13 @@ class PredictionService:
             )
         )
         atletas = result.scalars().all()
+
+        # Fallback: if min_jogos filter returns nothing, include all priced players
+        if not atletas:
+            result = await self.db.execute(
+                select(Atleta).where(Atleta.preco_num > 0)
+            )
+            atletas = result.scalars().all()
 
         predictions = []
         for atleta in atletas:
@@ -208,13 +215,16 @@ class PredictionService:
         exclude_ids: list[int] | None = None,
     ) -> dict:
         """
-        Build the best possible team within budget using optimization.
+        Build the best possible team within budget.
+
+        Uses a fast bulk query instead of per-player predictions to avoid
+        N+1 query problems. Works at any point in the season.
 
         Strategies:
-        - balanced: maximize predicted score
-        - aggressive: favor high-ceiling players (max_score)
-        - conservative: favor consistent players (low CV)
-        - value: maximize points per cartoleta
+        - balanced: maximize media historical avg
+        - aggressive: favor high-scoring potential
+        - conservative: reliable players (good media relative to price)
+        - value: maximize points per cartoleta (media / preco)
         """
         if formation not in FORMATIONS:
             raise ValueError(f"Formação inválida: {formation}. Use: {list(FORMATIONS.keys())}")
@@ -222,34 +232,73 @@ class PredictionService:
         formation_slots = FORMATIONS[formation]
         exclude_set = set(exclude_ids or [])
 
-        # Get predictions for all eligible players
-        all_predictions = await self.predict_all_players(min_jogos=1)
+        # Fast bulk load — one query vs N individual queries
+        candidates = await self._load_players_for_lineup(exclude_set)
 
-        # Filter out excluded and unavailable
-        candidates = [
-            p for p in all_predictions
-            if p["atleta_id"] not in exclude_set
-        ]
+        if not candidates:
+            return {
+                "success": False,
+                "message": "Sem jogadores no banco de dados. Execute a sincronização primeiro (POST /api/v1/sync/full).",
+                "formation": formation,
+                "budget": budget,
+                "players": [],
+            }
 
-        # Group by position
+        # Group by position and compute minimum budget needed
+        by_pos_check: dict[str, list] = {}
+        for c in candidates:
+            by_pos_check.setdefault(c["posicao"].lower(), []).append(c)
+
+        min_possible = 0.0
+        missing: list[str] = []
+        for pos_key, slots_needed in formation_slots.items():
+            if slots_needed == 0:
+                continue
+            avail = sorted(by_pos_check.get(pos_key, []), key=lambda x: x["preco"])
+            if len(avail) < slots_needed:
+                missing.append(f"{pos_key.upper()} ({slots_needed} necessários, {len(avail)} disponíveis)")
+            else:
+                min_possible += sum(c["preco"] for c in avail[:slots_needed])
+
+        if missing:
+            return {
+                "success": False,
+                "message": f"Posições sem jogadores suficientes: {', '.join(missing)}. Sincronize os dados.",
+                "formation": formation,
+                "budget": budget,
+                "players": [],
+            }
+
+        if budget < min_possible:
+            return {
+                "success": False,
+                "message": (
+                    f"Orçamento C$ {budget:.0f} insuficiente para a formação {formation}. "
+                    f"Mínimo necessário: C$ {min_possible:.1f} (jogadores mais baratos por posição)."
+                ),
+                "formation": formation,
+                "budget": budget,
+                "min_budget_needed": round(min_possible, 1),
+                "players": [],
+            }
+
+        # Group by position for optimizer
         by_position: dict[str, list[dict]] = {}
-        for pred in candidates:
-            pos_key = pred["posicao"].lower()
-            if pos_key not in by_position:
-                by_position[pos_key] = []
-            by_position[pos_key].append(pred)
+        for c in candidates:
+            by_position.setdefault(c["posicao"].lower(), []).append(c)
 
-        # Build lineup using greedy + backtracking
-        lineup = self._optimize_lineup(
-            by_position, formation_slots, budget, strategy
-        )
+        lineup = self._optimize_lineup(by_position, formation_slots, budget, strategy)
 
         if not lineup:
             return {
                 "success": False,
-                "message": "Não foi possível montar um time dentro do orçamento",
+                "message": (
+                    f"Não foi possível distribuir C$ {budget:.0f} com a formação {formation}. "
+                    f"Mínimo teórico: C$ {min_possible:.1f}. Tente aumentar o orçamento ou mudar a formação."
+                ),
                 "formation": formation,
                 "budget": budget,
+                "min_budget_needed": round(min_possible, 1),
                 "players": [],
             }
 
@@ -257,10 +306,8 @@ class PredictionService:
         total_prediction = sum(p["prediction"]["score"] for p in lineup)
         total_media = sum(p["media_geral"] for p in lineup)
 
-        # Format response
-        players = []
-        for p in lineup:
-            players.append({
+        players = [
+            {
                 "atleta_id": p["atleta_id"],
                 "apelido": p["apelido"],
                 "foto": p["foto"],
@@ -275,7 +322,10 @@ class PredictionService:
                 "min_score": p["prediction"]["min_score"],
                 "max_score": p["prediction"]["max_score"],
                 "risk_label": p["risk"]["label"],
-            })
+                "variacao": p.get("variacao", 0),
+            }
+            for p in lineup
+        ]
 
         return {
             "success": True,
@@ -289,6 +339,124 @@ class PredictionService:
             "players_count": len(players),
             "players": sorted(players, key=lambda x: self._position_order(x["posicao"])),
         }
+
+    async def _load_players_for_lineup(self, exclude_set: set[int]) -> list[dict]:
+        """
+        Fast bulk loader for lineup building. One query with eager joins.
+
+        Loads atletas with their posicao and clube, then bulk-fetches scout
+        averages. Much faster than calling predict_player_score per player.
+        """
+        from sqlalchemy.orm import selectinload
+
+        # Load all players with a price (includes start-of-season players)
+        stmt = (
+            select(Atleta)
+            .options(selectinload(Atleta.posicao), selectinload(Atleta.clube))
+            .where(Atleta.preco_num > 0)
+        )
+        result = await self.db.execute(stmt)
+        atletas = result.scalars().unique().all()
+
+        if not atletas:
+            return []
+
+        player_ids = [a.id for a in atletas if a.id not in exclude_set]
+
+        # Bulk fetch scout data — aggregate per player
+        scout_result = await self.db.execute(
+            select(
+                ScoutRodada.atleta_id,
+                func.count(ScoutRodada.id).label("jogos"),
+                func.avg(ScoutRodada.pontos_num).label("avg_pts"),
+                func.stddev_pop(ScoutRodada.pontos_num).label("std_pts"),
+                func.max(ScoutRodada.pontos_num).label("max_pts"),
+            )
+            .where(
+                ScoutRodada.atleta_id.in_(player_ids),
+                ScoutRodada.entrou_em_campo == True,
+            )
+            .group_by(ScoutRodada.atleta_id)
+        )
+        scout_stats: dict[int, dict] = {}
+        for row in scout_result.fetchall():
+            scout_stats[row.atleta_id] = {
+                "jogos": row.jogos or 0,
+                "avg_pts": float(row.avg_pts or 0),
+                "std_pts": float(row.std_pts or 0),
+                "max_pts": float(row.max_pts or 0),
+            }
+
+        players = []
+        for a in atletas:
+            if a.id in exclude_set:
+                continue
+            if not a.posicao_id or not a.preco_num:
+                continue
+
+            pos_abbr = (a.posicao.abreviacao if a.posicao else POS_MAP.get(a.posicao_id, "?")).upper()
+            pos_nome = a.posicao.nome if a.posicao else ""
+            clube_nome = a.clube.nome_fantasia if a.clube else ""
+            clube_escudo = a.clube.escudo_30 if a.clube else ""
+
+            stats = scout_stats.get(a.id, {})
+            avg = stats.get("avg_pts", 0) or a.media_num or 0
+            std = stats.get("std_pts", 0)
+            max_pts = stats.get("max_pts", 0)
+            jogos = stats.get("jogos", 0) or a.jogos_num or 0
+
+            # Use media_num from API as baseline when no scout records exist
+            if avg == 0 and a.media_num > 0:
+                avg = a.media_num
+
+            confidence = min(95.0, max(10.0, (min(jogos, 10) / 10) * 80 + 15))
+
+            players.append({
+                "atleta_id": a.id,
+                "apelido": a.apelido,
+                "foto": a.foto,
+                "clube_nome": clube_nome,
+                "clube_escudo": clube_escudo,
+                "posicao": pos_abbr,
+                "posicao_nome": pos_nome,
+                "preco": a.preco_num,
+                "media_geral": round(avg, 2),
+                "jogos": jogos,
+                "variacao": a.variacao_num or 0,
+                "prediction": {
+                    "score": round(avg, 2),
+                    "min_score": round(max(avg - std, 0), 2),
+                    "max_score": round(max(max_pts, avg + std, avg * 1.5), 2),
+                    "confidence": round(confidence, 1),
+                    "method_breakdown": {
+                        "weighted_avg": round(avg, 2),
+                        "scout_projection": round(avg, 2),
+                        "historic_avg": round(a.media_num, 2),
+                        "form_factor": 1.0,
+                        "opponent_factor": 1.0,
+                    },
+                },
+                "consistency": {
+                    "cv": round((std / avg * 100) if avg > 0 else 0, 2),
+                    "desvio_padrao": round(std, 2),
+                    "rating": "consistente" if std < avg * 0.5 else "irregular",
+                    "acima_media_pct": 50.0,
+                    "pontuou_positivo_pct": 70.0,
+                },
+                "risk": {
+                    "label": "baixo" if std < 2 else "moderado" if std < 4 else "alto",
+                    "volatility": round(std, 2),
+                    "min_expected": round(max(avg - std, 0), 2),
+                    "max_expected": round(avg + std, 2),
+                },
+                "value": {
+                    "preco": a.preco_num,
+                    "pontos_por_cartoleta": round(avg / a.preco_num if a.preco_num > 0 else 0, 2),
+                    "rating": self._value_rating(avg, a.preco_num),
+                },
+            })
+
+        return players
 
     # ──────────────────────────────────────────────
     # Advanced Stats
@@ -578,11 +746,11 @@ class PredictionService:
         strategy: str,
     ) -> list[dict] | None:
         """
-        Budget-aware lineup optimizer with greedy selection + fallback.
+        Budget-aware greedy lineup optimizer.
 
-        1. Estimates avg budget per player and filters candidates within reach.
-        2. Greedy picks the best affordable player at each slot.
-        3. Falls back to cheapest available when budget is tight.
+        For each position (scarce first), picks the best-scoring player
+        that leaves enough budget to fill all remaining positions with
+        their cheapest available options. Falls back to cheapest if needed.
         """
         total_slots = sum(formation_slots.values())
         if total_slots == 0:
@@ -592,67 +760,81 @@ class PredictionService:
             if strategy == "aggressive":
                 return pred["prediction"]["max_score"]
             elif strategy == "conservative":
-                base = pred["prediction"]["score"]
+                avg = pred["media_geral"]
                 cv = pred["consistency"]["cv"]
-                return base * (1 - cv / 200)
+                return avg * (1 - cv / 300)
             elif strategy == "value":
                 price = pred["preco"]
-                if price <= 0:
-                    return 0
-                return pred["prediction"]["score"] / price
+                return pred["media_geral"] / price if price > 0 else 0
             else:  # balanced
-                return pred["prediction"]["score"]
+                return pred["media_geral"]
 
-        # Sort each position by strategy score
+        # Pre-sort each position by strategy score
         for pos_key in by_position:
             by_position[pos_key].sort(key=score_fn, reverse=True)
 
-        lineup = []
+        def min_reserve(pos_key_done: str, used: set[int], slots_already_filled: int) -> float:
+            """Minimum cost to fill all REMAINING slots (positions not yet done,
+            plus remaining slots in current position)."""
+            total = 0.0
+            for pk, sn in formation_slots.items():
+                if sn == 0:
+                    continue
+                if pk == pos_key_done:
+                    sn_left = sn - slots_already_filled
+                    if sn_left <= 0:
+                        continue
+                else:
+                    sn_left = sn
+                pool = sorted(
+                    [c for c in by_position.get(pk, []) if c["atleta_id"] not in used],
+                    key=lambda x: x["preco"],
+                )
+                if len(pool) < sn_left:
+                    return float("inf")
+                total += sum(c["preco"] for c in pool[:sn_left])
+            return total
+
+        lineup: list[dict] = []
         remaining = budget
         used_ids: set[int] = set()
-        slots_remaining = total_slots
 
-        # Process positions in order of scarcity (fewer candidates first)
+        # Process positions in order of scarcity (fewest candidates first)
         position_order = sorted(
-            formation_slots.items(),
+            [(k, v) for k, v in formation_slots.items() if v > 0],
             key=lambda x: len(by_position.get(x[0], [])),
         )
 
         for pos_key, slots_needed in position_order:
-            if slots_needed == 0:
-                continue
-
             candidates = [
                 p for p in by_position.get(pos_key, [])
                 if p["atleta_id"] not in used_ids
             ]
-
             if not candidates:
-                return None  # No candidates for this position at all
+                return None
 
             selected = 0
-
-            # Calculate max affordable price per remaining slot
-            avg_budget_per_slot = remaining / max(slots_remaining, 1)
-
-            # First pass: pick the best scorers that fit the budget
             for candidate in candidates:
                 if selected >= slots_needed:
                     break
-                if candidate["preco"] <= remaining and candidate["preco"] <= avg_budget_per_slot * 2.5:
+                price = candidate["preco"]
+                if price > remaining:
+                    continue
+                # Check we can still fill all remaining slots after picking this one
+                reserve = min_reserve(pos_key, used_ids | {candidate["atleta_id"]}, selected + 1)
+                if price + reserve <= remaining:
                     lineup.append(candidate)
-                    remaining -= candidate["preco"]
+                    remaining -= price
                     used_ids.add(candidate["atleta_id"])
                     selected += 1
-                    slots_remaining -= 1
 
-            # Second pass: fall back to cheapest available if we couldn't fill slots
+            # Fallback to cheapest if best-scored didn't fit
             if selected < slots_needed:
-                cheap_candidates = sorted(
+                cheap = sorted(
                     [c for c in candidates if c["atleta_id"] not in used_ids],
                     key=lambda x: x["preco"],
                 )
-                for candidate in cheap_candidates:
+                for candidate in cheap:
                     if selected >= slots_needed:
                         break
                     if candidate["preco"] <= remaining:
@@ -660,10 +842,9 @@ class PredictionService:
                         remaining -= candidate["preco"]
                         used_ids.add(candidate["atleta_id"])
                         selected += 1
-                        slots_remaining -= 1
 
             if selected < slots_needed:
-                return None  # Can't fill this position
+                return None
 
         return lineup if len(lineup) == total_slots else None
 

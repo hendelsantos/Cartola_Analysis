@@ -342,6 +342,7 @@ export interface LineupPlayer {
   min_score: number;
   max_score: number;
   risk_label: string;
+  variacao?: number;
 }
 
 export interface LineupResponse {
@@ -356,6 +357,8 @@ export interface LineupResponse {
   players_count: number;
   players: LineupPlayer[];
   message?: string;
+  min_budget_needed?: number;
+  hint?: string;
 }
 
 export interface LineupParams {

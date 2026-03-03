@@ -65,7 +65,12 @@ export default function EscalacaoPage() {
       const result = await buildLineup({ budget, formation, strategy });
       setLineup(result);
       if (!result.success) {
-        setError(result.message || "Não foi possível montar o time");
+        let msg = result.message || "Não foi possível montar o time";
+        if (result.min_budget_needed && result.min_budget_needed > budget) {
+          msg += ` — clique em "Usar C$ ${result.min_budget_needed.toFixed(0)}" para ajustar.`;
+          setBudget(result.min_budget_needed + 5);
+        }
+        setError(msg);
       }
     } catch (e) {
       setError("Erro ao montar escalação. Tente novamente.");
@@ -207,9 +212,22 @@ export default function EscalacaoPage() {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-          <AlertTriangle className="h-4 w-4" />
-          {error}
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="flex-1">
+            <p>{error}</p>
+            {lineup && !lineup.success && lineup.min_budget_needed && (
+              <button
+                onClick={() => {
+                  setBudget(Math.ceil(lineup.min_budget_needed! + 5));
+                  setError(null);
+                }}
+                className="mt-2 rounded bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+              >
+                Usar C$ {Math.ceil(lineup.min_budget_needed + 5)} e tentar novamente
+              </button>
+            )}
+          </div>
         </div>
       )}
 
