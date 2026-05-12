@@ -383,7 +383,11 @@ class SyncService:
         return count
 
     async def sync_historical_partidas(self) -> dict:
-        """Sync partidas for all past rounds that aren't yet in the database."""
+        """Sync partidas for all past rounds.
+
+        Always re-syncs rounds that have unscored matches (placar_oficial_mandante IS NULL)
+        so results are updated after games are played.
+        """
         try:
             mercado = await self.api.get_mercado_status()
             rodada_atual = mercado.get("rodada_atual", 1)
@@ -391,16 +395,26 @@ class SyncService:
             logger.warning("could_not_get_mercado_for_partidas_history", error=str(e))
             return {"synced_rounds": 0, "error": str(e)}
 
-        result = await self.db.execute(
+        # Rounds with at least one unscored match need re-sync
+        result_unscored = await self.db.execute(
+            select(Partida.rodada_id)
+            .where(Partida.placar_oficial_mandante.is_(None))
+            .distinct()
+        )
+        unscored_rounds = {row[0] for row in result_unscored.fetchall()}
+
+        # Rounds completely missing from DB
+        result_existing = await self.db.execute(
             select(Partida.rodada_id).distinct()
         )
-        existing_rounds = {row[0] for row in result.fetchall()}
+        existing_rounds = {row[0] for row in result_existing.fetchall()}
+        missing_rounds = set(range(1, rodada_atual)) - existing_rounds
+
+        rounds_to_sync = missing_rounds | (unscored_rounds & set(range(1, rodada_atual)))
 
         synced = 0
         errors = 0
-        for rodada_id in range(1, rodada_atual):
-            if rodada_id in existing_rounds:
-                continue
+        for rodada_id in sorted(rounds_to_sync):
             try:
                 count = await self._sync_partidas_rodada(rodada_id)
                 if count > 0:
