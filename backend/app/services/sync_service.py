@@ -57,6 +57,7 @@ class SyncService:
         results["partidas"] = await self.sync_partidas()
         results["mercado"] = await self.sync_mercado_status()
         results["historico"] = await self.sync_historical_pontuados()
+        results["partidas_historico"] = await self.sync_historical_partidas()
         logger.info("full_sync_completed", results=results)
         return results
 
@@ -379,6 +380,89 @@ class SyncService:
 
         await self.db.commit()
         logger.info("sync_partidas_completed", count=count)
+        return count
+
+    async def sync_historical_partidas(self) -> dict:
+        """Sync partidas for all past rounds that aren't yet in the database."""
+        try:
+            mercado = await self.api.get_mercado_status()
+            rodada_atual = mercado.get("rodada_atual", 1)
+        except Exception as e:
+            logger.warning("could_not_get_mercado_for_partidas_history", error=str(e))
+            return {"synced_rounds": 0, "error": str(e)}
+
+        result = await self.db.execute(
+            select(Partida.rodada_id).distinct()
+        )
+        existing_rounds = {row[0] for row in result.fetchall()}
+
+        synced = 0
+        errors = 0
+        for rodada_id in range(1, rodada_atual):
+            if rodada_id in existing_rounds:
+                continue
+            try:
+                count = await self._sync_partidas_rodada(rodada_id)
+                if count > 0:
+                    synced += 1
+                    logger.info("synced_historical_partidas_round", rodada=rodada_id, count=count)
+            except Exception as e:
+                errors += 1
+                logger.warning("failed_sync_partidas_round", rodada=rodada_id, error=str(e))
+
+        logger.info("historical_partidas_sync_completed", synced_rounds=synced, errors=errors)
+        return {"synced_rounds": synced, "errors": errors}
+
+    async def _sync_partidas_rodada(self, rodada_id: int) -> int:
+        """Sync partidas for a specific past round."""
+        try:
+            data = await self.api.get_partidas_rodada(rodada_id)
+        except Exception as e:
+            logger.warning("partidas_rodada_fetch_failed", rodada=rodada_id, error=str(e))
+            return 0
+
+        partidas = data.get("partidas", [])
+        count = 0
+        for p in partidas:
+            partida_data = None
+            if p.get("partida_data"):
+                try:
+                    partida_data = datetime.fromisoformat(p["partida_data"])
+                except (ValueError, TypeError):
+                    partida_data = None
+
+            stmt = pg_insert(Partida).values(
+                id=p["partida_id"],
+                rodada_id=rodada_id,
+                clube_casa_id=p["clube_casa_id"],
+                clube_visitante_id=p["clube_visitante_id"],
+                clube_casa_posicao=p.get("clube_casa_posicao"),
+                clube_visitante_posicao=p.get("clube_visitante_posicao"),
+                placar_oficial_mandante=p.get("placar_oficial_mandante"),
+                placar_oficial_visitante=p.get("placar_oficial_visitante"),
+                local=p.get("local"),
+                partida_data=partida_data,
+                valida=p.get("valida", False),
+                aproveitamento_mandante=p.get("aproveitamento_mandante"),
+                aproveitamento_visitante=p.get("aproveitamento_visitante"),
+            )
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["id"],
+                set_={
+                    "clube_casa_posicao": p.get("clube_casa_posicao"),
+                    "clube_visitante_posicao": p.get("clube_visitante_posicao"),
+                    "placar_oficial_mandante": p.get("placar_oficial_mandante"),
+                    "placar_oficial_visitante": p.get("placar_oficial_visitante"),
+                    "valida": p.get("valida", False),
+                    "aproveitamento_mandante": p.get("aproveitamento_mandante"),
+                    "aproveitamento_visitante": p.get("aproveitamento_visitante"),
+                },
+            )
+            await self.db.execute(stmt)
+            count += 1
+
+        if count > 0:
+            await self.db.commit()
         return count
 
     async def sync_mercado_status(self) -> int:

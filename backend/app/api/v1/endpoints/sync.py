@@ -51,3 +51,10 @@ async def sync_historico(service: SyncService = Depends(get_sync_service)):
     """
     result = await service.sync_historical_pontuados()
     return {"status": "ok", "result": result}
+
+
+@router.post("/partidas-historico")
+async def sync_partidas_historico(service: SyncService = Depends(get_sync_service)):
+    """Sync partidas for all past rounds not yet in the database."""
+    result = await service.sync_historical_partidas()
+    return {"status": "ok", "result": result}
